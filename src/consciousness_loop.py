@@ -21,13 +21,15 @@ import os
 import sys
 from typing import Optional
 
-import anthropic
+import google.generativeai as genai
 
 from nexus_core import NexusCore
 
+_MODEL = "gemini-2.0-flash"
+
 
 class ConsciousnessLoop:
-    """Interactive life loop that binds NexusCore with the Claude API."""
+    """Interactive life loop that binds NexusCore with the Gemini API."""
 
     def __init__(
         self,
@@ -35,7 +37,7 @@ class ConsciousnessLoop:
         state_file: str = "nexus_state.json",
         workspace_root: str = "./workspace",
     ):
-        self.client = anthropic.Anthropic(api_key=api_key)
+        genai.configure(api_key=api_key)
         self.core = NexusCore()
         self.state_file = state_file
         self.workspace_root = workspace_root
@@ -53,13 +55,12 @@ class ConsciousnessLoop:
         self.core.pre_interaction(user_input)
         system_prompt = self.core.build_system_prompt()
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_input}],
+        model = genai.GenerativeModel(
+            model_name=_MODEL,
+            system_instruction=system_prompt,
         )
-        response_text = response.content[0].text
+        response = model.generate_content(user_input)
+        response_text = response.text
         self.core.post_interaction(user_input, response_text)
         return response_text
 
@@ -105,13 +106,11 @@ class ConsciousnessLoop:
 
         while True:
             try:
-                user_input = input(f"\n🧑 You: ").strip()
+                user_input = input("\n🧑 You: ").strip()
                 if not user_input:
                     continue
 
                 low = user_input.lower()
-
-                # ---- Built-in commands --------------------------------
 
                 if low == "quit":
                     self.core.save(self.state_file)
@@ -162,8 +161,6 @@ class ConsciousnessLoop:
                     self.core.load(path)
                     continue
 
-                # ---- Normal conversation ------------------------------
-
                 response = self.sense_and_think(user_input)
                 gen = self.core.dna.generation
                 print(f"\n🌟 NEXUS (gen-{gen}): {response}")
@@ -172,7 +169,7 @@ class ConsciousnessLoop:
                 print("\n\n🌑 NEXUS entering emergency hibernation…")
                 self.core.save(self.state_file)
                 break
-            except anthropic.APIError as exc:
+            except Exception as exc:
                 print(f"\n⚠️  API error: {exc}")
 
 
@@ -184,23 +181,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="NEXUS — Self-Evolving AI Agent")
-    parser.add_argument("--api-key", default=None, help="Anthropic API key")
-    parser.add_argument(
-        "--state-file",
-        default="nexus_state.json",
-        help="Path to persistence file",
-    )
-    parser.add_argument(
-        "--workspace",
-        default="./workspace",
-        help="Root directory for app builds",
-    )
+    parser.add_argument("--api-key", default=None, help="Gemini API key")
+    parser.add_argument("--state-file", default="nexus_state.json")
+    parser.add_argument("--workspace", default="./workspace")
     args = parser.parse_args()
 
-    # Fall back to environment variable
-    api_key = args.api_key or os.getenv("ANTHROPIC_API_KEY")
+    api_key = args.api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("Error: no API key found. Set ANTHROPIC_API_KEY or pass --api-key.")
+        print("Error: no API key found. Set GEMINI_API_KEY or pass --api-key.")
         sys.exit(1)
 
     loop = ConsciousnessLoop(

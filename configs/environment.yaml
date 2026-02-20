@@ -3,7 +3,7 @@
 agent:
   name: NEXUS
   version: "1.0.0"
-  model: "claude-sonnet-4-20250514"
+  model: "gemini-2.0-flash"
   max_response_tokens: 2048
 
 lifecycle:

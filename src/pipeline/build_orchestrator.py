@@ -1,7 +1,7 @@
 """
 build_orchestrator.py — Master controller for the NEXUS app-building pipeline.
 
-Uses Claude as the "brain" and the tool modules as the "hands" to plan,
+Uses Gemini as the "brain" and the tool modules as the "hands" to plan,
 scaffold, implement, test, debug, document, and deploy applications
 described in plain English.
 """
@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import anthropic
+import google.generativeai as genai
 
 from memory.memory_ecology import MemoryEcology
 from tools.file_system import FileSystemTool
@@ -81,7 +81,8 @@ class BuildOrchestrator:
         memory: Optional[MemoryEcology] = None,
         workspace_root: str = "./workspace",
     ):
-        self.client = anthropic.Anthropic(api_key=api_key)
+        genai.configure(api_key=api_key)
+        self._model_name = "gemini-2.0-flash"
         self.fs = FileSystemTool(workspace_root=workspace_root)
         self.terminal = TerminalTool(default_cwd=workspace_root)
         self.git = GitManager(self.terminal)
@@ -161,13 +162,17 @@ class BuildOrchestrator:
     def _claude(
         self, system: str, messages: list, max_tokens: int = 4096
     ) -> str:
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
+        # messages is a list of {"role": "user"|"assistant", "content": "..."}
+        # Gemini only needs the last user turn; system goes via system_instruction
+        user_text = " ".join(
+            m["content"] for m in messages if m.get("role") == "user"
         )
-        return response.content[0].text
+        model = genai.GenerativeModel(
+            model_name=self._model_name,
+            system_instruction=system,
+        )
+        response = model.generate_content(user_text)
+        return response.text
 
     # ------------------------------------------------------------------
     # Phase implementations
