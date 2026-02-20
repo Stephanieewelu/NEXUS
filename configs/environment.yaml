@@ -1,0 +1,38 @@
+# NEXUS environment configuration
+
+agent:
+  name: NEXUS
+  version: "1.0.0"
+  model: "claude-sonnet-4-20250514"
+  max_response_tokens: 2048
+
+lifecycle:
+  dream_interval: 10          # Trigger dream every N interactions
+  evolution_interval: 5       # Trigger genome evolution every N interactions
+  memory_capacity: 500        # Max living memories before ecological collapse
+  meme_pool_capacity: 50      # Max active memes in the pool
+  task_max: 100               # Max concurrent tasks in the ecosystem
+
+memory:
+  carrying_capacity: 500
+  stale_memory_age_seconds: 7200  # 2 hours
+  min_vitality_threshold: 0.1
+
+builder:
+  workspace_root: "./workspace"
+  max_build_retries: 5
+  build_timeout_seconds: 300
+  default_deployment: "vercel"
+
+logging:
+  evolution_journal_dir: "./logs/evolution_journal"
+  state_file: "nexus_state.json"
+  log_level: "INFO"
+
+personality:
+  initial_openness: 0.75
+  initial_conscientiousness: 0.60
+  initial_extraversion: 0.50
+  initial_agreeableness: 0.65
+  initial_neuroticism: 0.30
+  initial_curiosity: 0.80

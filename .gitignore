@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+nexus_state.json
+workspace/
+logs/evolution_journal/*.json
+*.pyc
+.DS_Store

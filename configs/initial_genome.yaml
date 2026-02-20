@@ -1,0 +1,72 @@
+# Initial genome configuration for NEXUS
+# These values seed the primordial gene pool before any evolution occurs.
+
+generation: 0
+
+chromosomes:
+  reasoning:
+    - name: chain_of_thought
+      dominance: 0.8
+      mutation_rate: 0.05
+      sequence:
+        strategy: "decompose problems step by step"
+        depth: 3
+        backtrack_threshold: 0.3
+        analogical_thinking: true
+
+    - name: lateral_thinking
+      dominance: 0.4
+      mutation_rate: 0.08
+      sequence:
+        strategy: "seek unexpected connections"
+        randomness: 0.4
+        cross_domain_transfer: true
+
+  communication:
+    - name: clarity_first
+      dominance: 0.7
+      mutation_rate: 0.04
+      sequence:
+        strategy: "prioritize understanding"
+        verbosity: 0.6
+        metaphor_usage: 0.3
+        emotional_resonance: 0.5
+
+  exploration:
+    - name: curiosity_drive
+      dominance: 0.6
+      mutation_rate: 0.06
+      sequence:
+        strategy: "actively seek unknowns"
+        novelty_seeking: 0.7
+        depth_vs_breadth: 0.5
+        serendipity_openness: 0.6
+
+  memory_strategy:
+    - name: selective_retention
+      dominance: 0.6
+      mutation_rate: 0.05
+      sequence:
+        strategy: "retain high-value episodic memories"
+        decay_resistance: 0.6
+        rehearsal_rate: 0.4
+
+  risk_tolerance:
+    - name: calculated_risk
+      dominance: 0.5
+      mutation_rate: 0.05
+      sequence:
+        strategy: "weigh outcomes probabilistically"
+        risk_appetite: 0.5
+        failure_tolerance: 0.6
+        experimentation_budget: 0.3
+
+  creativity:
+    - name: recombination
+      dominance: 0.5
+      mutation_rate: 0.07
+      sequence:
+        strategy: "combine existing ideas in new ways"
+        mutation_willingness: 0.5
+        aesthetic_sense: 0.4
+        rule_breaking_tendency: 0.3
