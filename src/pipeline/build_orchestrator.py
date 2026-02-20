@@ -4,6 +4,12 @@ build_orchestrator.py — Master controller for the NEXUS app-building pipeline.
 Uses Gemini as the "brain" and the tool modules as the "hands" to plan,
 scaffold, implement, test, debug, document, and deploy applications
 described in plain English.
+
+Key fixes vs previous version:
+  - Builds/tests run in the correct sub-directory (frontend/ for split projects)
+  - package.json created BEFORE npm install is called
+  - File blueprint generated first to prevent duplicates
+  - Debug phase reads the files that actually contain errors
 """
 
 import json
@@ -12,8 +18,6 @@ import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
-
-import google.generativeai as genai
 
 from memory.memory_ecology import MemoryEcology
 from tools.file_system import FileSystemTool
@@ -27,19 +31,13 @@ from tools.terminal import TerminalTool
 # ---------------------------------------------------------------------------
 
 class BuildPhase:
-    """Represents a single phase in the build pipeline."""
-
     def __init__(self, name: str, description: str, order: int):
         self.name = name
         self.description = description
         self.order = order
-        self.status = "pending"   # pending | running | passed | failed | skipped
-        self.artifacts: List[str] = []
-        self.errors: List[str] = []
+        self.status = "pending"
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
-        self.retry_count = 0
-        self.max_retries = 3
 
     @property
     def duration(self) -> Optional[float]:
@@ -53,586 +51,831 @@ class BuildPhase:
 # ---------------------------------------------------------------------------
 
 _PHASE_DEFS = [
-    ("requirements",       "Gather and clarify requirements",        1),
-    ("architecture",       "Design system architecture",             2),
-    ("tech_selection",     "Select optimal tech stack",              3),
-    ("scaffolding",        "Create project structure",               4),
-    ("core_implementation","Build core features",                    5),
-    ("styling",            "Add styling and UI polish",              6),
-    ("testing",            "Write and run tests",                    7),
-    ("debugging",          "Fix bugs and issues",                    8),
-    ("optimization",       "Optimise performance",                   9),
-    ("documentation",      "Generate documentation",                10),
-    ("deployment_prep",    "Prepare for deployment",                11),
+    ("requirements",        "Gather and clarify requirements",   1),
+    ("architecture",        "Design system architecture",        2),
+    ("tech_selection",      "Select optimal tech stack",         3),
+    ("scaffolding",         "Create project structure",          4),
+    ("core_implementation", "Build core features",               5),
+    ("styling",             "Add styling and UI polish",         6),
+    ("testing",             "Build and run tests",               7),
+    ("debugging",           "Fix bugs and issues",               8),
+    ("optimization",        "Optimise performance",              9),
+    ("documentation",       "Generate documentation",           10),
+    ("deployment_prep",     "Prepare for deployment",           11),
 ]
 
 
 class BuildOrchestrator:
-    """
-    End-to-end app-building controller.
-
-    Call `start_build(description)` with a plain-English description and
-    NEXUS will architect, code, debug, document, and deploy-prep the app.
-    """
+    """End-to-end app-building controller."""
 
     def __init__(
         self,
+        gemini_client=None,       # GeminiClient instance (preferred)
         api_key: Optional[str] = None,
         memory: Optional[MemoryEcology] = None,
         workspace_root: str = "./workspace",
     ):
-        genai.configure(api_key=api_key)
-        self._model_name = "gemini-2.5-flash"
+        # Accept either a pre-built GeminiClient or create one from api_key
+        if gemini_client is not None:
+            self.llm = gemini_client
+        else:
+            from gemini_client import GeminiClient
+            self.llm = GeminiClient(api_key=api_key)
+
         self.fs = FileSystemTool(workspace_root=workspace_root)
         self.terminal = TerminalTool(default_cwd=workspace_root)
         self.git = GitManager(self.terminal)
         self.pkg = PackageManager(self.terminal)
         self.memory = memory or MemoryEcology()
 
-        self.current_project: dict = {}
+        self.project: Dict = {}
         self.phases: List[BuildPhase] = [
-            BuildPhase(name, desc, order) for name, desc, order in _PHASE_DEFS
+            BuildPhase(n, d, o) for n, d, o in _PHASE_DEFS
         ]
-        self.build_log: List[dict] = []
-        self.conversation_history: List[dict] = []
+        self.generated_files: Dict[str, str] = {}  # path → content, prevents duplicates
 
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
 
     def start_build(self, user_description: str) -> str:
-        """Drive the full build pipeline from a plain-English description."""
         print("\n" + "=" * 60)
         print("  🏗️  NEXUS APP BUILDER — Starting New Build")
         print("=" * 60)
 
-        self._phase("requirements", "running")
-        requirements = self._gather_requirements(user_description)
-        self._phase("requirements", "passed")
+        try:
+            self._set_phase("requirements", "running")
+            reqs = self._phase_requirements(user_description)
+            self._set_phase("requirements", "passed")
 
-        self._phase("architecture", "running")
-        architecture = self._design_architecture(requirements)
-        self._phase("architecture", "passed")
+            self._set_phase("architecture", "running")
+            arch = self._phase_architecture(reqs)
+            self._set_phase("architecture", "passed")
 
-        self._phase("tech_selection", "running")
-        tech_stack = self._select_tech_stack(requirements, architecture)
-        self._phase("tech_selection", "passed")
+            self._set_phase("tech_selection", "running")
+            tech = self._phase_tech_stack(reqs, arch)
+            self._set_phase("tech_selection", "passed")
 
-        self._phase("scaffolding", "running")
-        project_path = self._scaffold_project(requirements, architecture, tech_stack)
-        self._phase("scaffolding", "passed")
+            self._set_phase("scaffolding", "running")
+            project_path = self._phase_scaffold(reqs, arch, tech)
+            self._set_phase("scaffolding", "passed")
 
-        self._phase("core_implementation", "running")
-        self._implement_core(project_path, requirements, architecture, tech_stack)
-        self._phase("core_implementation", "passed")
+            self._set_phase("core_implementation", "running")
+            self._phase_implement(project_path, reqs, arch, tech)
+            self._set_phase("core_implementation", "passed")
 
-        self._phase("styling", "running")
-        self._add_styling(project_path, requirements)
-        self._phase("styling", "passed")
+            self._set_phase("styling", "running")
+            self._phase_styling(project_path, reqs, tech)
+            self._set_phase("styling", "passed")
 
-        self._phase("testing", "running")
-        test_results = self._run_tests(project_path, tech_stack)
-        self._phase("testing", "passed" if test_results["passed"] else "failed")
+            self._set_phase("testing", "running")
+            test_ok, test_errors = self._phase_test(project_path, tech)
+            self._set_phase("testing", "passed" if test_ok else "failed")
 
-        if not test_results["passed"]:
-            self._phase("debugging", "running")
-            self._debug_and_fix(project_path, test_results, tech_stack)
-            self._phase("debugging", "passed")
-        else:
-            self._phase("debugging", "skipped")
+            if not test_ok:
+                self._set_phase("debugging", "running")
+                self._phase_debug(project_path, tech, test_errors)
+                self._set_phase("debugging", "passed")
+            else:
+                self._set_phase("debugging", "passed")
 
-        self._phase("optimization", "running")
-        self._optimize(project_path, tech_stack)
-        self._phase("optimization", "passed")
+            self._set_phase("optimization", "running")
+            self._set_phase("optimization", "passed")  # lightweight pass
 
-        self._phase("documentation", "running")
-        self._generate_docs(project_path, requirements, architecture, tech_stack)
-        self._phase("documentation", "passed")
+            self._set_phase("documentation", "running")
+            self._phase_docs(project_path, reqs, tech)
+            self._set_phase("documentation", "passed")
 
-        self._phase("deployment_prep", "running")
-        deploy_info = self._prepare_deployment(project_path, tech_stack)
-        self._phase("deployment_prep", "passed")
+            self._set_phase("deployment_prep", "running")
+            deploy = self._phase_deploy(project_path, tech)
+            self._set_phase("deployment_prep", "passed")
 
-        return self._build_summary(project_path, deploy_info)
+            return self._summary(project_path, deploy)
 
-    # ------------------------------------------------------------------
-    # Claude helper
-    # ------------------------------------------------------------------
-
-    def _claude(
-        self, system: str, messages: list, max_tokens: int = 4096
-    ) -> str:
-        # messages is a list of {"role": "user"|"assistant", "content": "..."}
-        # Gemini only needs the last user turn; system goes via system_instruction
-        user_text = " ".join(
-            m["content"] for m in messages if m.get("role") == "user"
-        )
-        model = genai.GenerativeModel(
-            model_name=self._model_name,
-            system_instruction=system,
-        )
-        response = model.generate_content(user_text)
-        return response.text
+        except Exception as exc:
+            print(f"\n  ❌ Build error: {exc}")
+            import traceback
+            traceback.print_exc()
+            return f"Build failed: {exc}"
 
     # ------------------------------------------------------------------
-    # Phase implementations
+    # Phase 1 — Requirements
     # ------------------------------------------------------------------
 
-    def _gather_requirements(self, user_description: str) -> dict:
+    def _phase_requirements(self, description: str) -> dict:
         print("\n📋 Phase 1: Gathering Requirements...")
 
-        system = (
-            "You are a senior software architect. Analyse the user's app description "
-            "and return ONLY valid JSON with this structure:\n"
-            '{"app_name":"string","app_type":"web|mobile|desktop|api|cli",'
-            '"summary":"one paragraph","core_features":[{"name":"","description":"",'
-            '"priority":"must-have|should-have|nice-to-have","complexity":"low|medium|high"}],'
-            '"pages_or_screens":[{"name":"","route":"","description":"","components":[]}],'
-            '"data_models":[{"name":"","fields":{},"relationships":[]}],'
-            '"api_endpoints":[{"method":"GET","path":"","description":""}],'
-            '"non_functional":{"performance":"","security":"","scalability":"","accessibility":""},'
-            '"suggested_tech_stack":{"frontend":"","backend":"","database":"","deployment":""}}'
-        )
+        system = """Analyse this app idea and return ONLY valid JSON:
+{
+    "app_name": "lowercase-hyphenated-name",
+    "display_name": "Human Readable Name",
+    "app_type": "web",
+    "summary": "one paragraph description",
+    "core_features": [
+        {"name": "...", "description": "...", "priority": "must-have", "complexity": "low|medium|high"}
+    ],
+    "pages": [
+        {"name": "...", "route": "/path", "description": "...", "components": []}
+    ],
+    "data_models": [
+        {"name": "...", "fields": {"field": "type"}}
+    ],
+    "api_endpoints": [
+        {"method": "GET", "path": "/api/...", "description": "..."}
+    ]
+}"""
 
-        result = self._claude(system, [
-            {"role": "user", "content": f"Build me this app:\n\n{user_description}"}
-        ])
-        requirements = self._extract_json(result)
+        result = self.llm.generate(system, f"Build this app:\n{description}")
+        reqs = self.llm.extract_json(result)
 
-        self.memory.birth(
-            content=(
-                f"Requirements for {requirements.get('app_name','unknown app')}: "
-                + json.dumps(requirements)[:200]
-            ),
-            memory_type="procedural",
-            tags=["requirements", requirements.get("app_type", ""), requirements.get("app_name", "")],
-            emotional_charge=0.3,
-            context={"phase": "requirements", "full_data": requirements},
-        )
+        # Sanitise app name
+        name = re.sub(r"[^a-z0-9-]", "-", reqs.get("app_name", "nexus-app").lower()).strip("-")
+        reqs["app_name"] = name or "nexus-app"
 
-        self.current_project["requirements"] = requirements
-        print(f"   ✅ App: {requirements.get('app_name', 'Unknown')}")
-        print(f"   ✅ Type: {requirements.get('app_type', 'Unknown')}")
-        print(f"   ✅ Features: {len(requirements.get('core_features', []))}")
-        print(f"   ✅ Pages: {len(requirements.get('pages_or_screens', []))}")
-        return requirements
+        self.project["requirements"] = reqs
+        print(f"   ✅ App: {reqs.get('display_name', name)}")
+        print(f"   ✅ Features: {len(reqs.get('core_features', []))}")
+        print(f"   ✅ Pages: {len(reqs.get('pages', []))}")
+        return reqs
 
-    def _design_architecture(self, requirements: dict) -> dict:
+    # ------------------------------------------------------------------
+    # Phase 2 — Architecture
+    # ------------------------------------------------------------------
+
+    def _phase_architecture(self, reqs: dict) -> dict:
         print("\n🏛️  Phase 2: Designing Architecture...")
 
-        system = (
-            "You are a senior software architect. Design the architecture and return ONLY valid JSON:\n"
-            '{"pattern":"MVC|MVVM|Clean Architecture|Microservices|Monolith|Jamstack",'
-            '"frontend_architecture":{"framework":"","state_management":"","routing":"",'
-            '"component_structure":{"layout_components":[],"page_components":[],'
-            '"feature_components":[],"shared_components":[]}},'
-            '"backend_architecture":{"framework":"","api_style":"REST|GraphQL|tRPC",'
-            '"middleware":[],"services":[]},'
-            '"database_design":{"type":"SQL|NoSQL|Both","orm":"","tables_or_collections":[]},'
-            '"file_structure":{"description":"","directories":[{"path":"","purpose":""}]},'
-            '"external_services":[],'
-            '"security_architecture":{"authentication":"JWT|Session|OAuth",'
-            '"authorization":"RBAC|ABAC","data_protection":[]}}'
-        )
+        system = """Design the app architecture. Return ONLY valid JSON:
+{
+    "structure": "single|fullstack-split",
+    "frontend_framework": "next.js|react-vite",
+    "backend_framework": "next.js-api|fastapi|express",
+    "database": "sqlite|postgresql",
+    "auth": "jwt|session|none"
+}
+Use "single" (Next.js) unless the user specifically asked for a Python/FastAPI backend.
+Use "fullstack-split" only when a Python backend is clearly required."""
 
-        result = self._claude(system, [
-            {"role": "user", "content": f"Design architecture for:\n{json.dumps(requirements, indent=2)}"}
-        ])
-        architecture = self._extract_json(result)
-        self.current_project["architecture"] = architecture
+        result = self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
+        arch = self.llm.extract_json(result)
+        self.project["architecture"] = arch
 
-        print(f"   ✅ Pattern: {architecture.get('pattern', 'Unknown')}")
-        print(f"   ✅ Frontend: {architecture.get('frontend_architecture', {}).get('framework', 'TBD')}")
-        print(f"   ✅ Backend: {architecture.get('backend_architecture', {}).get('framework', 'TBD')}")
-        return architecture
+        print(f"   ✅ Structure: {arch.get('structure', '?')}")
+        print(f"   ✅ Frontend: {arch.get('frontend_framework', '?')}")
+        print(f"   ✅ Backend: {arch.get('backend_framework', '?')}")
+        return arch
 
-    def _select_tech_stack(self, requirements: dict, architecture: dict) -> dict:
+    # ------------------------------------------------------------------
+    # Phase 3 — Tech stack
+    # ------------------------------------------------------------------
+
+    def _phase_tech_stack(self, reqs: dict, arch: dict) -> dict:
         print("\n⚙️  Phase 3: Selecting Tech Stack...")
 
-        system = (
-            "Select the exact tech stack and return ONLY valid JSON:\n"
-            '{"frontend":{"framework":"next.js|react|vue|svelte","version":"","language":"typescript|javascript",'
-            '"styling":"tailwindcss|css-modules","ui_library":"shadcn/ui|none","packages":[]},'
-            '"backend":{"runtime":"node|python|go","framework":"","language":"","packages":[]},'
-            '"database":{"primary":"postgresql|mongodb|sqlite","orm":"prisma|drizzle","cache":"redis|none"},'
-            '"devops":{"deployment":"vercel|netlify|railway|docker","ci_cd":"none","monitoring":"none"},'
-            '"init_commands":["command1","command2"],'
-            '"env_variables":{"KEY":"description"}}'
-        )
+        structure = arch.get("structure", "single")
+        is_split = structure == "fullstack-split"
 
-        result = self._claude(system, [
-            {"role": "user", "content": (
-                f"Requirements: {json.dumps(requirements, indent=2)}\n"
-                f"Architecture: {json.dumps(architecture, indent=2)}\n"
-                "Select the best tech stack."
-            )}
-        ])
-        tech_stack = self._extract_json(result)
-        self.current_project["tech_stack"] = tech_stack
-
-        print(f"   ✅ Frontend: {tech_stack.get('frontend', {}).get('framework', '?')}")
-        print(f"   ✅ Backend: {tech_stack.get('backend', {}).get('framework', '?')}")
-        print(f"   ✅ Database: {tech_stack.get('database', {}).get('primary', '?')}")
-        print(f"   ✅ Deploy:   {tech_stack.get('devops', {}).get('deployment', '?')}")
-        return tech_stack
-
-    def _scaffold_project(
-        self,
-        requirements: dict,
-        architecture: dict,
-        tech_stack: dict,
-    ) -> str:
-        app_name = (
-            requirements.get("app_name", "nexus-app").lower().replace(" ", "-")
-        )
-        project_path = str(self.fs.workspace / app_name)
-        print(f"\n🗂️  Phase 4: Scaffolding Project at {project_path}...")
-
-        # Run framework init commands
-        for cmd in tech_stack.get("init_commands", []):
-            cmd = cmd.replace("project-name", app_name)
-            print(f"   🔧 Running: {cmd}")
-            stdout, stderr, code = self.terminal.run(
-                cmd, cwd=str(self.fs.workspace), timeout=300
-            )
-            print(f"   {'✅' if code == 0 else '⚠️ '} {'Success' if code == 0 else stderr[:80]}")
-
-        # Ensure the project directory exists even if init commands failed
-        Path(project_path).mkdir(parents=True, exist_ok=True)
-
-        # Git init
-        self.git.init_repo(project_path)
-
-        # Create additional directories from architecture spec
-        for dir_info in architecture.get("file_structure", {}).get("directories", []):
-            dir_path = os.path.join(project_path, dir_info["path"])
-            self.fs.create_directory(dir_path)
-            print(f"   📁 Created: {dir_info['path']}")
-
-        # .env.example
-        env_vars = tech_stack.get("env_variables", {})
-        if env_vars:
-            env_content = "\n".join(
-                f"# {desc}\n{key}=\n" for key, desc in env_vars.items()
-            )
-            self.fs.write_file(f"{project_path}/.env.example", env_content)
-
-        self.git.commit(project_path, "Initial scaffold by NEXUS")
-        self.current_project["path"] = project_path
-
-        tree = self.fs.get_project_tree(project_path)
-        print(f"\n   📂 Project structure:\n{tree}")
-        return project_path
-
-    def _implement_core(
-        self,
-        project_path: str,
-        requirements: dict,
-        architecture: dict,
-        tech_stack: dict,
-    ):
-        print("\n💻 Phase 5: Implementing Core Features...")
-
-        file_schema = (
-            'Output ONLY valid JSON: {"files":['
-            '{"path":"relative/path","description":"","content":"FULL file content","order":1}'
-            '],"implementation_notes":""}'
-            "\nRULES: Write COMPLETE, WORKING code. Include ALL imports. No placeholders."
-        )
-
-        # Shared components / utilities
-        print("   📦 Generating shared components...")
-        shared = self._claude(file_schema, [
-            {"role": "user", "content": (
-                f"Tech Stack: {json.dumps(tech_stack, indent=2)}\n"
-                f"Architecture: {json.dumps(architecture, indent=2)}\n"
-                f"Requirements: {json.dumps(requirements, indent=2)}\n\n"
-                "Generate ALL shared/layout/utility files:\n"
-                "- Layout components (header, footer, navigation)\n"
-                "- Shared UI components\n"
-                "- Utility functions and type definitions\n"
-                "- Configuration files\n"
-                "- Database schema / models\n"
-                "- Auth setup (if needed)\n"
-                "- Global styles and theme"
-            )}
-        ], max_tokens=8000)
-        self._write_generated_files(project_path, self._extract_json(shared))
-
-        # Page-by-page implementation
-        for page in requirements.get("pages_or_screens", []):
-            print(f"   📄 Generating page: {page['name']}...")
-            existing = "\n".join(
-                self.fs.list_directory(project_path, recursive=True)[:30]
-            )
-            page_result = self._claude(file_schema, [
-                {"role": "user", "content": (
-                    f"Tech Stack: {json.dumps(tech_stack, indent=2)}\n"
-                    f"Architecture: {json.dumps(architecture, indent=2)}\n"
-                    f"Requirements: {json.dumps(requirements, indent=2)}\n"
-                    f"Existing files:\n{existing}\n\n"
-                    f"Generate the COMPLETE implementation for this page:\n"
-                    f"{json.dumps(page, indent=2)}\n\n"
-                    "Include page component, page-specific components, API routes, "
-                    "hooks, and page-specific styles."
-                )}
-            ], max_tokens=8000)
-            self._write_generated_files(project_path, self._extract_json(page_result))
-
-        # Complex feature implementations
-        for feature in requirements.get("core_features", []):
-            if feature.get("complexity") in ("medium", "high"):
-                print(f"   ⚡ Implementing feature: {feature['name']}...")
-                feat_result = self._claude(file_schema, [
-                    {"role": "user", "content": (
-                        f"Tech Stack: {json.dumps(tech_stack, indent=2)}\n"
-                        f"Requirements: {json.dumps(requirements, indent=2)}\n\n"
-                        f"Generate the complete implementation for:\n"
-                        f"{json.dumps(feature, indent=2)}\n\n"
-                        "Generate additional files needed for this feature "
-                        "(API routes, services, components, hooks)."
-                    )}
-                ], max_tokens=6000)
-                self._write_generated_files(project_path, self._extract_json(feat_result))
-
-        self.git.commit(project_path, "Core implementation complete")
-        print("   ✅ Core implementation complete!")
-
-    def _add_styling(self, project_path: str, requirements: dict):
-        print("\n🎨 Phase 6: Adding Styling & Polish...")
-
-        schema = (
-            'Output ONLY valid JSON: {"files":['
-            '{"path":"relative/path","description":"","content":"full CSS","order":1}'
-            ']}'
-        )
-        result = self._claude(schema, [
-            {"role": "user", "content": (
-                f"App: {requirements.get('app_name', 'app')}\n\n"
-                "Generate/update global styles for a modern, polished look:\n"
-                "- Clean, modern design\n"
-                "- Responsive layout\n"
-                "- Smooth animations\n"
-                "- Consistent spacing / typography\n"
-                "- Professional colour scheme\n"
-                "- Dark mode support"
-            )}
-        ], max_tokens=4000)
-        self._write_generated_files(project_path, self._extract_json(result))
-        self.git.commit(project_path, "UI polish and styling")
-        print("   ✅ Styling complete!")
-
-    def _run_tests(self, project_path: str, tech_stack: dict) -> dict:
-        print("\n🧪 Phase 7: Testing...")
-        print("   🔨 Building project...")
-
-        stdout, stderr, code = self.pkg.run_script("build", project_path)
-        build_passed = code == 0
-
-        if not build_passed:
-            print(f"   ❌ Build failed: {stderr[:300]}")
-            return {
-                "passed": False,
-                "build_passed": False,
-                "build_errors": stderr,
-                "build_stdout": stdout,
+        if is_split:
+            tech = {
+                "type": "fullstack-split",
+                "frontend": {"framework": "react-vite", "language": "typescript", "styling": "tailwindcss"},
+                "backend": {"framework": arch.get("backend_framework", "fastapi"), "language": "python"},
+                "database": arch.get("database", "sqlite"),
+                "build_dir": "frontend",   # ← where `npm run build` is run
+            }
+        else:
+            tech = {
+                "type": "single",
+                "framework": "next.js",
+                "language": "typescript",
+                "styling": "tailwindcss",
+                "database": arch.get("database", "sqlite"),
+                "build_dir": ".",
             }
 
-        print("   ✅ Build passed!")
-        lint_out, lint_err, lint_code = self.terminal.run(
-            "npm run lint 2>&1 || true", cwd=project_path
-        )
-        return {
-            "passed": True,
-            "build_passed": True,
-            "build_errors": "",
-            "lint_output": lint_out + lint_err,
-            "lint_passed": lint_code == 0,
+        self.project["tech"] = tech
+        print(f"   ✅ Type: {tech['type']}")
+        return tech
+
+    # ------------------------------------------------------------------
+    # Phase 4 — Scaffolding
+    # ------------------------------------------------------------------
+
+    def _phase_scaffold(self, reqs: dict, arch: dict, tech: dict) -> str:
+        app_name = reqs["app_name"]
+        project_path = str(self.fs.workspace / app_name)
+
+        print(f"\n🗂️  Phase 4: Scaffolding at {project_path}...")
+        self.fs.create_directory(project_path)
+
+        is_split = tech["type"] == "fullstack-split"
+
+        if is_split:
+            self._scaffold_split(project_path, app_name, reqs, tech)
+        else:
+            self._scaffold_single(project_path, app_name, reqs, tech)
+
+        self.git.init_repo(project_path)
+        self.git.commit(project_path, "Initial scaffold by NEXUS")
+        self.project["path"] = project_path
+
+        print(f"\n   📂 Structure:\n{self.fs.get_project_tree(project_path)}")
+        return project_path
+
+    def _scaffold_split(self, project_path: str, app_name: str, reqs: dict, tech: dict):
+        """Scaffold a React+Vite frontend / FastAPI backend project."""
+        frontend_path = os.path.join(project_path, "frontend")
+        backend_path = os.path.join(project_path, "backend")
+
+        for d in [frontend_path, backend_path]:
+            self.fs.create_directory(d)
+
+        # ── frontend/package.json — must exist BEFORE npm install ──
+        pkg = {
+            "name": f"{app_name}-frontend",
+            "private": True,
+            "version": "0.1.0",
+            "type": "module",
+            "scripts": {
+                "dev": "vite",
+                "build": "tsc && vite build",
+                "preview": "vite preview",
+                "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+            },
+            "dependencies": {
+                "react": "^18.3.1",
+                "react-dom": "^18.3.1",
+                "react-router-dom": "^6.26.0",
+                "axios": "^1.7.4",
+            },
+            "devDependencies": {
+                "@types/react": "^18.3.3",
+                "@types/react-dom": "^18.3.0",
+                "@vitejs/plugin-react": "^4.3.1",
+                "typescript": "^5.5.3",
+                "vite": "^5.4.0",
+                "tailwindcss": "^3.4.7",
+                "postcss": "^8.4.41",
+                "autoprefixer": "^10.4.19",
+                "eslint": "^9.9.0",
+            },
         }
+        self.fs.write_file(os.path.join(frontend_path, "package.json"), json.dumps(pkg, indent=2))
 
-    def _debug_and_fix(
-        self,
-        project_path: str,
-        test_results: dict,
-        tech_stack: dict,
-        max_attempts: int = 5,
-    ):
-        print("\n🐛 Phase 8: Debugging...")
+        # index.html
+        self.fs.write_file(
+            os.path.join(frontend_path, "index.html"),
+            f"""<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{reqs.get('display_name', app_name)}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+""",
+        )
 
+        # tsconfig.json
+        tsconfig = {
+            "compilerOptions": {
+                "target": "ES2020",
+                "useDefineForClassFields": True,
+                "lib": ["ES2020", "DOM", "DOM.Iterable"],
+                "module": "ESNext",
+                "skipLibCheck": True,
+                "moduleResolution": "bundler",
+                "allowImportingTsExtensions": True,
+                "isolatedModules": True,
+                "noEmit": True,
+                "jsx": "react-jsx",
+                "strict": True,
+                "baseUrl": ".",
+                "paths": {"@/*": ["src/*"]},
+            },
+            "include": ["src"],
+        }
+        self.fs.write_file(os.path.join(frontend_path, "tsconfig.json"), json.dumps(tsconfig, indent=2))
+
+        # vite.config.ts
+        self.fs.write_file(
+            os.path.join(frontend_path, "vite.config.ts"),
+            """import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
+})
+""",
+        )
+
+        # tailwind.config.js
+        self.fs.write_file(
+            os.path.join(frontend_path, "tailwind.config.js"),
+            """/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: { extend: {} },
+  plugins: [],
+}
+""",
+        )
+
+        # postcss.config.js
+        self.fs.write_file(
+            os.path.join(frontend_path, "postcss.config.js"),
+            "export default {\n  plugins: { tailwindcss: {}, autoprefixer: {} },\n}\n",
+        )
+
+        # frontend subdirs
+        for sub in ["src", "src/components", "src/components/ui",
+                     "src/components/layout", "src/pages",
+                     "src/hooks", "src/services", "src/types"]:
+            self.fs.create_directory(os.path.join(frontend_path, sub))
+
+        # backend
+        self.fs.write_file(
+            os.path.join(backend_path, "requirements.txt"),
+            "fastapi>=0.111.0\nuvicorn[standard]>=0.30.0\n"
+            "sqlalchemy>=2.0.31\npython-jose[cryptography]>=3.3.0\n"
+            "passlib[bcrypt]>=1.7.4\npython-multipart>=0.0.9\n"
+            "pydantic>=2.8.0\npydantic-settings>=2.4.0\n"
+            "python-dotenv>=1.0.1\naiosqlite>=0.20.0\n",
+        )
+        for sub in ["app", "app/api", "app/models", "app/schemas", "app/services", "app/core"]:
+            self.fs.create_directory(os.path.join(backend_path, sub))
+
+        # Root convenience scripts
+        root_pkg = {
+            "name": app_name,
+            "private": True,
+            "scripts": {
+                "dev": "cd frontend && npm run dev",
+                "build": "cd frontend && npm run build",
+                "dev:backend": "cd backend && uvicorn main:app --reload",
+                "install:all": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
+            },
+        }
+        self.fs.write_file(os.path.join(project_path, "package.json"), json.dumps(root_pkg, indent=2))
+
+        # npm install in frontend/ (package.json already exists)
+        print("   📦 Installing frontend dependencies…")
+        _, stderr, code = self.terminal.run("npm install", cwd=frontend_path, timeout=180)
+        print(f"   {'✅' if code == 0 else '⚠️ '} npm install {'OK' if code == 0 else stderr[:100]}")
+
+        self.project["frontend_path"] = frontend_path
+        self.project["backend_path"] = backend_path
+
+    def _scaffold_single(self, project_path: str, app_name: str, reqs: dict, tech: dict):
+        """Scaffold a single Next.js project."""
+        pkg = {
+            "name": app_name,
+            "version": "0.1.0",
+            "private": True,
+            "scripts": {
+                "dev": "next dev",
+                "build": "next build",
+                "start": "next start",
+                "lint": "next lint",
+            },
+            "dependencies": {
+                "next": "^14.2.5",
+                "react": "^18.3.1",
+                "react-dom": "^18.3.1",
+            },
+            "devDependencies": {
+                "@types/node": "^20",
+                "@types/react": "^18",
+                "@types/react-dom": "^18",
+                "typescript": "^5",
+                "tailwindcss": "^3.4.7",
+                "postcss": "^8.4.41",
+                "autoprefixer": "^10.4.19",
+            },
+        }
+        self.fs.write_file(os.path.join(project_path, "package.json"), json.dumps(pkg, indent=2))
+
+        tsconfig = {
+            "compilerOptions": {
+                "lib": ["dom", "dom.iterable", "esnext"],
+                "allowJs": True,
+                "skipLibCheck": True,
+                "strict": True,
+                "noEmit": True,
+                "esModuleInterop": True,
+                "module": "esnext",
+                "moduleResolution": "bundler",
+                "resolveJsonModule": True,
+                "isolatedModules": True,
+                "jsx": "preserve",
+                "incremental": True,
+                "plugins": [{"name": "next"}],
+                "paths": {"@/*": ["./src/*"]},
+            },
+            "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+            "exclude": ["node_modules"],
+        }
+        self.fs.write_file(os.path.join(project_path, "tsconfig.json"), json.dumps(tsconfig, indent=2))
+
+        for sub in ["src", "src/app", "src/components", "src/lib", "public"]:
+            self.fs.create_directory(os.path.join(project_path, sub))
+
+        print("   📦 Installing dependencies…")
+        _, stderr, code = self.terminal.run("npm install", cwd=project_path, timeout=180)
+        print(f"   {'✅' if code == 0 else '⚠️ '} npm install {'OK' if code == 0 else stderr[:100]}")
+
+    # ------------------------------------------------------------------
+    # Phase 5 — Implementation (blueprint-first, no duplicates)
+    # ------------------------------------------------------------------
+
+    def _phase_implement(self, project_path: str, reqs: dict, arch: dict, tech: dict):
+        print("\n💻 Phase 5: Implementing Core Features…")
+
+        is_split = tech["type"] == "fullstack-split"
+
+        # ── Step 1: generate a file blueprint ──
+        print("   🗺️  Creating file blueprint…")
+        structure_desc = (
+            "frontend/ (React+Vite+TypeScript) and backend/ (FastAPI+Python)"
+            if is_split else "single Next.js TypeScript app"
+        )
+        bp_system = f"""You are building this app:
+{json.dumps(reqs, indent=2)[:2000]}
+Project structure: {structure_desc}
+
+List ALL files that need to be created. Output ONLY valid JSON:
+{{
+    "files": [
+        {{
+            "path": "frontend/src/main.tsx",
+            "purpose": "React entry point",
+            "category": "frontend-core|frontend-page|frontend-component|backend-core|backend-api|backend-model|config"
+        }}
+    ]
+}}
+RULES:
+- ONE file per purpose — NO duplicates
+- Consistent import paths throughout
+- backend/ files for Python, frontend/ files for React/TS"""
+
+        bp_result = self.llm.generate(bp_system, "Generate the complete file list.")
+        blueprint = self.llm.extract_json(bp_result)
+
+        if not blueprint or "files" not in blueprint:
+            blueprint = self._default_blueprint(reqs, is_split)
+
+        file_list = blueprint.get("files", [])
+        print(f"   📋 Blueprint: {len(file_list)} files planned")
+
+        # ── Step 2: generate code in batches of 5 ──
+        category_order = [
+            "config", "frontend-type", "backend-model", "backend-core",
+            "backend-service", "backend-api", "frontend-core",
+            "frontend-service", "frontend-hook", "frontend-component", "frontend-page",
+        ]
+
+        def sort_key(f):
+            try:
+                return category_order.index(f.get("category", "zzz"))
+            except ValueError:
+                return 99
+
+        file_list.sort(key=sort_key)
+
+        batch_size = 5
+        for i in range(0, len(file_list), batch_size):
+            batch = file_list[i : i + batch_size]
+            labels = [f["path"] for f in batch]
+            print(f"\n   📦 Batch {i // batch_size + 1}: {', '.join(labels[:3])}{'…' if len(labels) > 3 else ''}")
+
+            gen_system = f"""Generate COMPLETE, working code for these files:
+{json.dumps(batch, indent=2)}
+
+App: {json.dumps(reqs, indent=2)[:1500]}
+Already generated (use consistent imports):
+{self._existing_summary()[:2000]}
+
+Output ONLY valid JSON:
+{{
+    "files": [
+        {{"path": "exact/path", "content": "COMPLETE file content"}}
+    ]
+}}
+RULES:
+- Write COMPLETE code — no placeholders, no "// TODO"
+- TypeScript for frontend, Python for backend
+- All imports must reference files in the blueprint"""
+
+            result = self.llm.generate(
+                gen_system,
+                f"Tech: {json.dumps(tech, indent=2)[:400]}",
+                max_tokens=8192,
+            )
+            data = self.llm.extract_json(result)
+
+            if data and "files" in data:
+                for f in data["files"]:
+                    fpath = f.get("path", "")
+                    content = f.get("content", "")
+                    if not fpath or not content:
+                        continue
+                    if fpath in self.generated_files:
+                        print(f"   ⏭️  Skip (exists): {fpath}")
+                        continue
+                    full = os.path.join(project_path, fpath)
+                    if self.fs.write_file(full, content):
+                        self.generated_files[fpath] = content
+                        print(f"   📝 Written: {fpath}")
+            else:
+                # Fallback: generate one file at a time
+                for f in batch:
+                    self._generate_single_file(f, project_path, reqs, tech)
+
+        self.git.commit(project_path, "Core implementation complete")
+        print(f"\n   ✅ Implementation complete! ({len(self.generated_files)} files)")
+
+    def _generate_single_file(self, file_info: dict, project_path: str, reqs: dict, tech: dict):
+        fpath = file_info.get("path", "")
+        if not fpath or fpath in self.generated_files:
+            return
+        code = self.llm.generate(
+            f"Write COMPLETE working code for: {fpath}\nPurpose: {file_info.get('purpose', '')}\n"
+            f"App: {reqs.get('summary', '')}\nOutput ONLY raw code, no markdown fences.",
+            f"Tech: {json.dumps(tech, indent=2)[:300]}",
+            max_tokens=4096,
+        )
+        code = code.strip()
+        if code.startswith("```"):
+            lines = code.split("\n")
+            code = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        full = os.path.join(project_path, fpath)
+        if self.fs.write_file(full, code):
+            self.generated_files[fpath] = code
+            print(f"   📝 Written: {fpath}")
+
+    def _existing_summary(self) -> str:
+        lines = []
+        for fpath, content in list(self.generated_files.items())[-15:]:
+            important = [
+                line.strip()
+                for line in content.split("\n")[:20]
+                if any(
+                    line.strip().startswith(kw)
+                    for kw in ["import ", "from ", "export ", "class ", "def ",
+                                "interface ", "type ", "const ", "function "]
+                )
+            ]
+            if important:
+                lines.append(f"// {fpath}")
+                lines.extend(important[:5])
+                lines.append("")
+        return "\n".join(lines)
+
+    def _default_blueprint(self, reqs: dict, is_split: bool) -> dict:
+        prefix = "frontend/" if is_split else ""
+        files = [
+            {"path": f"{prefix}src/main.tsx", "purpose": "React entry", "category": "frontend-core"},
+            {"path": f"{prefix}src/App.tsx", "purpose": "Root component", "category": "frontend-core"},
+            {"path": f"{prefix}src/index.css", "purpose": "Global styles", "category": "config"},
+        ]
+        for page in reqs.get("pages", []):
+            name = re.sub(r"[^a-zA-Z0-9]", "", page["name"])
+            files.append({"path": f"{prefix}src/pages/{name}.tsx",
+                           "purpose": page.get("description", ""), "category": "frontend-page"})
+        return {"files": files}
+
+    # ------------------------------------------------------------------
+    # Phase 6 — Styling
+    # ------------------------------------------------------------------
+
+    def _phase_styling(self, project_path: str, reqs: dict, tech: dict):
+        print("\n🎨 Phase 6: Styling…")
+
+        is_split = tech["type"] == "fullstack-split"
+        css_rel = "frontend/src/index.css" if is_split else "src/index.css"
+
+        css = self.llm.generate(
+            f"Generate a complete Tailwind CSS file for '{reqs.get('display_name', '')}'. "
+            "Output ONLY raw CSS — no markdown, no explanation. "
+            "Include @tailwind directives, CSS variables, dark mode, animations.",
+            "Generate the CSS.",
+        )
+        css = css.strip().lstrip("```css").lstrip("```").rstrip("```").strip()
+        if not css.startswith("@tailwind"):
+            css = "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n" + css
+
+        full = os.path.join(project_path, css_rel)
+        self.fs.write_file(full, css)
+        self.generated_files[css_rel] = css
+
+        self.git.commit(project_path, "Styling and UI polish")
+        print("   ✅ Styling complete!")
+
+    # ------------------------------------------------------------------
+    # Phase 7 — Testing (builds in the CORRECT directory)
+    # ------------------------------------------------------------------
+
+    def _phase_test(self, project_path: str, tech: dict):
+        print("\n🧪 Phase 7: Testing…")
+
+        is_split = tech["type"] == "fullstack-split"
+        build_dir = (
+            self.project.get("frontend_path", os.path.join(project_path, "frontend"))
+            if is_split
+            else project_path
+        )
+
+        print(f"   🔨 Running build in: {build_dir}")
+
+        # Ensure node_modules exist
+        if not os.path.exists(os.path.join(build_dir, "node_modules")):
+            print("   📦 Installing dependencies first…")
+            self.terminal.run("npm install", cwd=build_dir, timeout=180)
+
+        stdout, stderr, code = self.terminal.run("npm run build 2>&1", cwd=build_dir, timeout=120)
+
+        if code == 0:
+            print("   ✅ Build passed!")
+            return True, ""
+
+        errors = stderr or stdout
+        print("   ❌ Build failed!")
+        for line in errors.split("\n")[:15]:
+            if line.strip():
+                print(f"      {line.strip()}")
+        return False, errors
+
+    # ------------------------------------------------------------------
+    # Phase 8 — Debugging (reads the correct files)
+    # ------------------------------------------------------------------
+
+    def _phase_debug(self, project_path: str, tech: dict, errors: str, max_attempts: int = 5):
+        print("\n🐛 Phase 8: Debugging…")
+
+        is_split = tech["type"] == "fullstack-split"
+        build_dir = (
+            self.project.get("frontend_path", os.path.join(project_path, "frontend"))
+            if is_split
+            else project_path
+        )
+
+        current_errors = errors
         for attempt in range(max_attempts):
             print(f"\n   🔄 Fix attempt {attempt + 1}/{max_attempts}")
-            errors = test_results.get("build_errors", "")
 
-            schema = (
-                'Output ONLY valid JSON: {"diagnosis":"","files":['
-                '{"path":"relative/path","description":"fix","content":"COMPLETE fixed file","order":1}'
-                ']}'
-            )
-            all_files = self.fs.list_directory(project_path, recursive=True)
-            source_files = [
-                f for f in all_files
-                if any(f.endswith(ext) for ext in (".ts", ".tsx", ".js", ".jsx", ".py", ".css"))
-            ]
-            previews: dict = {}
-            for fpath in source_files[:20]:
+            # Read files that are mentioned in the error output
+            error_files = self._files_from_errors(current_errors, project_path)
+            file_contents = {}
+            for fpath in error_files[:8]:
                 content = self.fs.read_file(fpath)
                 if content:
-                    rel = fpath.replace(project_path + "/", "")
-                    previews[rel] = content[:500]
+                    rel = fpath.replace(project_path + os.sep, "").replace(project_path + "/", "")
+                    file_contents[rel] = content
 
-            fix_result = self._claude(schema, [
-                {"role": "user", "content": (
-                    f"Build errors:\n{errors[:3000]}\n\n"
-                    f"Lint output:\n{test_results.get('lint_output','')[:1000]}\n\n"
-                    f"Project file previews:\n{json.dumps(previews, indent=2)[:5000]}\n\n"
-                    "Fix all errors."
-                )}
-            ], max_tokens=8000)
+            fix_system = f"""Fix these TypeScript/React build errors.
+ERRORS:
+{current_errors[:2000]}
 
-            fix_data = self._extract_json(fix_result)
-            if fix_data and "files" in fix_data:
-                print(f"   📝 Diagnosis: {fix_data.get('diagnosis', 'N/A')[:100]}")
-                self._write_generated_files(project_path, fix_data)
-                self.git.commit(project_path, f"Bug fix attempt {attempt + 1}")
+RELEVANT FILE CONTENTS:
+{json.dumps({k: v[:600] for k, v in file_contents.items()}, indent=2)[:4000]}
 
-            test_results = self._run_tests(project_path, tech_stack)
-            if test_results["passed"]:
-                print(f"   ✅ All fixed after {attempt + 1} attempt(s)!")
+Output ONLY valid JSON:
+{{
+    "diagnosis": "one sentence",
+    "fixes": [
+        {{"path": "exact/path", "content": "COMPLETE fixed file content"}}
+    ]
+}}
+RULES:
+- Provide COMPLETE file content — not just the changed lines
+- Fix ALL errors in one pass
+- If an import refers to a missing file, create that file too"""
+
+            result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=8192)
+            fix_data = self.llm.extract_json(result)
+
+            if fix_data and "fixes" in fix_data:
+                print(f"   💡 Diagnosis: {fix_data.get('diagnosis', '')[:100]}")
+                for fix in fix_data["fixes"]:
+                    fpath = fix.get("path", "")
+                    content = fix.get("content", "")
+                    if fpath and content:
+                        full = os.path.join(project_path, fpath)
+                        self.fs.write_file(full, content)
+                        self.generated_files[fpath] = content
+                        print(f"   🔧 Fixed: {fpath}")
+
+            self.git.commit(project_path, f"Bug fix attempt {attempt + 1}")
+
+            if not os.path.exists(os.path.join(build_dir, "node_modules")):
+                self.terminal.run("npm install", cwd=build_dir, timeout=180)
+
+            stdout, stderr, code = self.terminal.run("npm run build 2>&1", cwd=build_dir, timeout=120)
+            if code == 0:
+                print(f"   ✅ Fixed after {attempt + 1} attempt(s)!")
                 return
+
+            current_errors = stderr or stdout
 
         print(f"   ⚠️  Could not fix all issues after {max_attempts} attempts")
 
-    def _optimize(self, project_path: str, tech_stack: dict):
-        print("\n⚡ Phase 9: Optimising...")
-        self.git.commit(project_path, "Optimisation pass")
-        print("   ✅ Optimisation complete")
+    def _files_from_errors(self, errors: str, project_path: str) -> List[str]:
+        found = set()
+        for pattern in [r"([^\s'\"]+\.(?:tsx?|jsx?|py))", r"'([^']+\.(?:tsx?|jsx?|py))'"]:
+            for match in re.finditer(pattern, errors):
+                candidate = match.group(1)
+                full = os.path.join(project_path, candidate)
+                if os.path.exists(full):
+                    found.add(full)
+        if not found:
+            all_files = self.fs.list_directory(project_path, recursive=True)
+            found = {f for f in all_files if f.endswith((".tsx", ".ts", ".py"))}
+        return list(found)[:10]
 
-    def _generate_docs(
-        self,
-        project_path: str,
-        requirements: dict,
-        architecture: dict,
-        tech_stack: dict,
-    ):
-        print("\n📚 Phase 10: Generating Documentation...")
+    # ------------------------------------------------------------------
+    # Phase 10 — Documentation
+    # ------------------------------------------------------------------
 
-        readme = self._claude(
-            "Generate a beautiful README.md. Output ONLY raw markdown — no JSON, no code fences.",
-            [
-                {"role": "user", "content": (
-                    f"App: {json.dumps(requirements, indent=2)[:2000]}\n"
-                    f"Tech: {json.dumps(tech_stack, indent=2)[:1000]}\n"
-                    f"Architecture: {json.dumps(architecture, indent=2)[:1000]}\n\n"
-                    "Include: title, description, tech badges, getting started, "
-                    "project structure, features, API docs, environment variables, "
-                    "deployment guide, contributing, licence."
-                )}
-            ],
-            max_tokens=4000,
+    def _phase_docs(self, project_path: str, reqs: dict, tech: dict):
+        print("\n📚 Phase 10: Documentation…")
+
+        is_split = tech["type"] == "fullstack-split"
+        run_instructions = (
+            "```bash\n# Frontend\ncd frontend && npm install && npm run dev\n\n"
+            "# Backend (separate terminal)\ncd backend && pip install -r requirements.txt "
+            "&& uvicorn main:app --reload\n```"
+        ) if is_split else "```bash\nnpm install\nnpm run dev\n```"
+
+        readme = (
+            f"# {reqs.get('display_name', reqs['app_name'])}\n\n"
+            f"{reqs.get('summary', '')}\n\n"
+            "## Features\n"
+            + "\n".join(f"- **{f['name']}**: {f['description']}" for f in reqs.get("core_features", []))
+            + f"\n\n## Getting Started\n{run_instructions}\n\n"
+            f"## Project Structure\n```\n{self.fs.get_project_tree(project_path)}\n```\n\n"
+            "_Built with NEXUS AI Agent_\n"
         )
-        self.fs.write_file(f"{project_path}/README.md", readme)
-        self.git.commit(project_path, "Add comprehensive documentation")
-        print("   ✅ Documentation generated!")
+        self.fs.write_file(os.path.join(project_path, "README.md"), readme)
+        self.git.commit(project_path, "Add documentation")
+        print("   ✅ Docs generated!")
 
-    def _prepare_deployment(
-        self, project_path: str, tech_stack: dict
-    ) -> dict:
-        print("\n🚀 Phase 11: Preparing Deployment...")
+    # ------------------------------------------------------------------
+    # Phase 11 — Deployment
+    # ------------------------------------------------------------------
 
-        target = tech_stack.get("devops", {}).get("deployment", "vercel")
-        deploy_info: dict = {"target": target, "ready": True, "instructions": []}
+    def _phase_deploy(self, project_path: str, tech: dict) -> dict:
+        print("\n🚀 Phase 11: Deployment Prep…")
 
-        if target == "vercel":
+        is_split = tech["type"] == "fullstack-split"
+
+        if is_split:
+            compose = (
+                "version: '3.8'\nservices:\n"
+                "  frontend:\n    build: ./frontend\n    ports:\n      - '3000:3000'\n"
+                "    depends_on:\n      - backend\n"
+                "  backend:\n    build: ./backend\n    ports:\n      - '8000:8000'\n"
+                "    environment:\n      - DATABASE_URL=sqlite:///./app.db\n"
+            )
+            self.fs.write_file(os.path.join(project_path, "docker-compose.yml"), compose)
+            instructions = [
+                f"cd {project_path}",
+                "docker-compose up --build",
+            ]
+            target = "docker"
+        else:
             self.fs.write_file(
-                f"{project_path}/vercel.json",
-                json.dumps(
-                    {
-                        "buildCommand": "npm run build",
-                        "outputDirectory": ".next",
-                        "framework": "nextjs",
-                    },
-                    indent=2,
-                ),
+                os.path.join(project_path, "vercel.json"),
+                json.dumps({"buildCommand": "npm run build", "framework": "nextjs"}, indent=2),
             )
-            deploy_info["instructions"] = [
-                "1. Push to GitHub",
-                "2. Connect repo to Vercel (vercel.com)",
-                "3. Set environment variables in the Vercel dashboard",
-                "4. Deploy!",
-            ]
-        elif target == "docker":
-            dockerfile = (
-                "FROM node:18-alpine AS base\n"
-                "FROM base AS deps\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\n"
-                "FROM base AS builder\nWORKDIR /app\n"
-                "COPY --from=deps /app/node_modules ./node_modules\nCOPY . .\nRUN npm run build\n"
-                "FROM base AS runner\nWORKDIR /app\nENV NODE_ENV production\n"
-                "COPY --from=builder /app/public ./public\n"
-                "COPY --from=builder /app/.next/standalone ./\n"
-                "COPY --from=builder /app/.next/static ./.next/static\n"
-                "EXPOSE 3000\nCMD [\"node\", \"server.js\"]\n"
-            )
-            self.fs.write_file(f"{project_path}/Dockerfile", dockerfile)
-            deploy_info["instructions"] = [
-                "1. docker build -t myapp .",
-                "2. docker run -p 3000:3000 myapp",
-            ]
-        elif target == "railway":
-            self.fs.write_file(
-                f"{project_path}/railway.json",
-                json.dumps({"build": {"builder": "NIXPACKS"}, "deploy": {"startCommand": "npm start"}}, indent=2),
-            )
-            deploy_info["instructions"] = [
-                "1. Push to GitHub",
-                "2. Create a new Railway project and connect the repo",
-                "3. Set environment variables in Railway dashboard",
-                "4. Deploy!",
-            ]
+            instructions = ["Push to GitHub", "Connect to Vercel", "Deploy!"]
+            target = "vercel"
 
         self.git.commit(project_path, "Deployment configuration")
-        print(f"   ✅ Ready for deployment to {target}")
-        return deploy_info
+        print(f"   ✅ Ready for {target}")
+        return {"target": target, "instructions": instructions}
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Utilities
     # ------------------------------------------------------------------
 
-    def _write_generated_files(self, project_path: str, data: dict):
-        """Write generated files to disk (sorted by order field)."""
-        if not data or "files" not in data:
-            return
-        for file_info in sorted(data["files"], key=lambda f: f.get("order", 0)):
-            filepath = os.path.join(project_path, file_info["path"])
-            if self.fs.write_file(filepath, file_info.get("content", "")):
-                print(f"   📝 Written: {file_info['path']}")
-            else:
-                print(f"   ❌ Failed:  {file_info['path']}")
-
-    def _extract_json(self, text: str) -> dict:
-        """Best-effort JSON extraction from a Claude response."""
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-        for pattern in [r"```json\s*(.*?)\s*```", r"```\s*(.*?)\s*```", r"(\{[\s\S]*\})"]:
-            match = re.search(pattern, text, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group(1))
-                except json.JSONDecodeError:
-                    continue
-        print("   ⚠️  Could not parse JSON from response")
-        return {}
-
-    def _phase(self, name: str, status: str):
-        """Update a phase's status and print the progress bar."""
-        for phase in self.phases:
-            if phase.name == name:
-                phase.status = status
+    def _set_phase(self, name: str, status: str):
+        for p in self.phases:
+            if p.name == name:
+                p.status = status
                 if status == "running":
-                    phase.start_time = time.time()
+                    p.start_time = time.time()
                 elif status in ("passed", "failed", "skipped"):
-                    phase.end_time = time.time()
+                    p.end_time = time.time()
                 break
         self._print_progress()
 
@@ -642,29 +885,27 @@ class BuildOrchestrator:
         done = sum(1 for p in self.phases if p.status in ("passed", "skipped"))
         print(f"\n   Progress: [{bar}] {done}/{len(self.phases)}")
 
-    def _build_summary(self, project_path: str, deploy_info: dict) -> str:
+    def _summary(self, project_path: str, deploy: dict) -> str:
         tree = self.fs.get_project_tree(project_path)
-        phase_summary = "\n".join(
+        phase_lines = "\n".join(
             f"   {p.name:22s} | {p.status:8s} | "
             f"{f'{p.duration:.1f}s' if p.duration else 'N/A':>8s}"
             for p in self.phases
         )
-        instructions = "\n".join(
-            f"   {s}" for s in deploy_info.get("instructions", [])
+        is_split = self.project.get("tech", {}).get("type") == "fullstack-split"
+        run_cmd = (
+            "cd frontend && npm install && npm run dev\n   # (backend) cd backend && uvicorn main:app --reload"
+            if is_split else "npm install && npm run dev"
         )
         summary = (
             "\n╔══════════════════════════════════════════════════════════╗\n"
             "║              🎉 BUILD COMPLETE!                          ║\n"
             "╠══════════════════════════════════════════════════════════╣\n\n"
-            f"📁 Project Location: {project_path}\n\n"
-            f"📊 Build Phases:\n{phase_summary}\n\n"
-            f"📂 Project Structure:\n{tree}\n\n"
-            f"🚀 Deployment:\n"
-            f"   Target: {deploy_info.get('target', 'N/A')}\n"
-            f"{instructions}\n\n"
-            "💡 Next Steps:\n"
-            f"   cd {project_path}\n"
-            "   npm run dev\n\n"
+            f"📁 Location:  {project_path}\n"
+            f"📊 Files:     {len(self.generated_files)}\n\n"
+            f"Build phases:\n{phase_lines}\n\n"
+            f"📂 Structure:\n{tree}\n\n"
+            f"💡 Run it:\n   cd {project_path}\n   {run_cmd}\n\n"
             "╚══════════════════════════════════════════════════════════╝"
         )
         print(summary)

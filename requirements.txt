@@ -1,2 +1,7 @@
+# Preferred: new Google GenAI SDK
+google-genai>=0.3.0
+
+# Legacy fallback (used automatically if google-genai is unavailable)
 google-generativeai>=0.8.0
+
 PyYAML>=6.0

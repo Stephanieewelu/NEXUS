@@ -21,11 +21,10 @@ import os
 import sys
 from typing import Optional
 
-import google.generativeai as genai
-
+from gemini_client import GeminiClient
 from nexus_core import NexusCore
 
-_MODEL = "gemini-2.5-flash"
+_DEFAULT_MODEL = "gemini-2.5-flash"
 
 
 class ConsciousnessLoop:
@@ -36,8 +35,9 @@ class ConsciousnessLoop:
         api_key: Optional[str] = None,
         state_file: str = "nexus_state.json",
         workspace_root: str = "./workspace",
+        model: str = _DEFAULT_MODEL,
     ):
-        genai.configure(api_key=api_key)
+        self.llm = GeminiClient(api_key=api_key, model=model)
         self.core = NexusCore()
         self.state_file = state_file
         self.workspace_root = workspace_root
@@ -54,13 +54,7 @@ class ConsciousnessLoop:
         """Full perception-cognition-response cycle."""
         self.core.pre_interaction(user_input)
         system_prompt = self.core.build_system_prompt()
-
-        model = genai.GenerativeModel(
-            model_name=_MODEL,
-            system_instruction=system_prompt,
-        )
-        response = model.generate_content(user_input)
-        response_text = response.text
+        response_text = self.llm.generate(system_prompt, user_input)
         self.core.post_interaction(user_input, response_text)
         return response_text
 
@@ -73,6 +67,7 @@ class ConsciousnessLoop:
         from pipeline.build_orchestrator import BuildOrchestrator
 
         builder = BuildOrchestrator(
+            gemini_client=self.llm,
             memory=self.core.memory,
             workspace_root=self.workspace_root,
         )
@@ -170,7 +165,7 @@ class ConsciousnessLoop:
                 self.core.save(self.state_file)
                 break
             except Exception as exc:
-                print(f"\n⚠️  API error: {exc}")
+                print(f"\n⚠️  Error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +177,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="NEXUS — Self-Evolving AI Agent")
     parser.add_argument("--api-key", default=None, help="Gemini API key")
+    parser.add_argument("--model", default=_DEFAULT_MODEL, help="Gemini model name")
     parser.add_argument("--state-file", default="nexus_state.json")
     parser.add_argument("--workspace", default="./workspace")
     args = parser.parse_args()
@@ -193,6 +189,7 @@ if __name__ == "__main__":
 
     loop = ConsciousnessLoop(
         api_key=api_key,
+        model=args.model,
         state_file=args.state_file,
         workspace_root=args.workspace,
     )
