@@ -1,71 +1,123 @@
 """
-gemini_client.py — Unified Gemini LLM client for NEXUS.
+gemini_client.py — Gemini client with SMART rate limiting for free tier.
 
-Tries the new google-genai SDK first; falls back to google-generativeai.
-Handles rate-limiting, JSON extraction, and retry logic.
+Free tier limits (as of 2025):
+  gemini-2.0-flash:  15 RPM, 1500 RPD, 1M TPM
+  gemini-2.5-flash:  ~10 RPM (stricter)
+  gemini-1.5-flash:  15 RPM
+
+Strategy: PREVENT 429s with proactive pacing instead of
+          retrying after they happen.
 """
 
 import json
 import os
 import re
 import time
+from collections import deque
 from typing import Optional
 
 
 class GeminiClient:
-    """Google Gemini client with automatic SDK detection and rate-limit handling."""
+    """Gemini client that carefully manages free-tier rate limits."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-2.0-flash",
     ):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         if not self.api_key:
             raise ValueError(
                 "Gemini API key not found. "
-                "Set GEMINI_API_KEY or pass api_key=. "
+                "Set GEMINI_API_KEY or pass api_key=.\n"
                 "Get a free key at https://aistudio.google.com/apikey"
             )
 
         self.model_name = model
-        self.request_count = 0
-        self._last_request_time = 0.0
 
-        # Try new SDK (google-genai) first, fall back to legacy (google-generativeai)
+        # ── Smart rate limiting state ──
+        self._request_timestamps: deque = deque(maxlen=20)
+        self._rpm_limit = 10          # stay under the real limit
+        self._min_delay = 7.0         # minimum seconds between requests
+        self._daily_count = 0
+        self._daily_limit = 1400      # stay under 1500 RPD
+        self._day_start = time.time()
+
+        self._init_sdk()
+
+    # ------------------------------------------------------------------
+    # SDK initialisation
+    # ------------------------------------------------------------------
+
+    def _init_sdk(self):
+        """Try new google-genai SDK first; fall back to google-generativeai."""
         try:
             from google import genai  # type: ignore
             self._client = genai.Client(api_key=self.api_key)
             self._sdk = "new"
-            print(f"  ✅ Gemini ready (google-genai SDK) — {model}")
+            print(f"  ✅ Gemini ready (google-genai SDK) — {self.model_name}")
         except (ImportError, Exception):
             try:
-                import google.generativeai as _legacy_genai  # type: ignore
-                _legacy_genai.configure(api_key=self.api_key)
-                self._legacy = _legacy_genai
+                import google.generativeai as _legacy  # type: ignore
+                _legacy.configure(api_key=self.api_key)
+                self._legacy = _legacy
                 self._sdk = "legacy"
-                print(f"  ⚠️  Gemini ready (legacy SDK) — {model}")
-                print("      Upgrade for best results: pip install google-genai")
+                print(f"  ⚠️  Gemini ready (legacy SDK) — {self.model_name}")
+                print("      Upgrade: pip install google-genai")
             except ImportError:
                 raise ImportError(
-                    "No Gemini SDK found. Install one:\n"
+                    "No Gemini SDK found.\n"
                     "  pip install google-genai          (recommended)\n"
                     "  pip install google-generativeai   (legacy)"
                 )
 
     # ------------------------------------------------------------------
-    # Rate limiting
+    # Smart rate limiting
     # ------------------------------------------------------------------
 
-    def _rate_limit(self):
-        """Enforce ~13 requests/min to stay within free tier limits."""
+    def _smart_rate_limit(self):
+        """
+        Proactively pace requests to prevent 429 errors before they occur.
+        """
         now = time.time()
-        elapsed = now - self._last_request_time
-        min_gap = 4.5  # seconds between requests
-        if elapsed < min_gap:
-            time.sleep(min_gap - elapsed)
-        self._last_request_time = time.time()
-        self.request_count += 1
+
+        # Reset daily counter after 24 h
+        if now - self._day_start > 86400:
+            self._daily_count = 0
+            self._day_start = now
+
+        # Hard daily limit
+        if self._daily_count >= self._daily_limit:
+            print("  🛑 Daily limit approaching — waiting 5 min…")
+            time.sleep(300)
+            self._daily_count = 0
+            self._day_start = time.time()
+
+        # Enforce minimum gap between requests
+        if self._request_timestamps:
+            elapsed = now - self._request_timestamps[-1]
+            if elapsed < self._min_delay:
+                wait = self._min_delay - elapsed
+                print(f"  ⏳ Pacing: {wait:.0f}s until next request…")
+                time.sleep(wait)
+
+        # Check RPM window
+        one_min_ago = time.time() - 60
+        recent = [t for t in self._request_timestamps if t > one_min_ago]
+
+        if len(recent) >= self._rpm_limit:
+            oldest = min(recent)
+            wait = 61 - (time.time() - oldest)
+            if wait > 0:
+                print(
+                    f"  ⏳ RPM limit ({len(recent)}/{self._rpm_limit}): "
+                    f"waiting {wait:.0f}s…"
+                )
+                time.sleep(wait)
+
+        self._request_timestamps.append(time.time())
+        self._daily_count += 1
 
     # ------------------------------------------------------------------
     # Core generate
@@ -76,24 +128,25 @@ class GeminiClient:
         system_prompt: str,
         user_message: str,
         max_tokens: int = 8192,
+        retries: int = 3,
     ) -> str:
         """
-        Generate text from Gemini.
+        Generate text with smart proactive rate limiting.
 
         Args:
             system_prompt: Instruction / persona for the model.
             user_message:  The actual user turn content.
             max_tokens:    Upper limit on output tokens.
+            retries:       Max attempts on transient errors.
 
         Returns:
-            Model response as a plain string (empty string on failure).
+            Model response as a plain string (empty on failure).
         """
-        self._rate_limit()
+        self._smart_rate_limit()
 
-        # Combine system + user into a single prompt (works with both SDKs)
         full_prompt = f"{system_prompt}\n\n---\n\n{user_message}"
 
-        for attempt in range(3):
+        for attempt in range(retries):
             try:
                 if self._sdk == "new":
                     response = self._client.models.generate_content(
@@ -119,18 +172,31 @@ class GeminiClient:
             except Exception as exc:
                 err = str(exc).lower()
 
-                # Rate limit / quota — back off and retry
                 if "429" in err or "quota" in err or "rate" in err:
-                    wait = 60 * (attempt + 1)
-                    print(f"  ⏳ Rate limited — waiting {wait}s (attempt {attempt + 1}/3)…")
+                    # Actual 429 hit despite pacing — back off harder
+                    wait = 65 * (attempt + 1)   # 65 s, 130 s, 195 s
+                    print(
+                        f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) — "
+                        f"waiting {wait}s…"
+                    )
                     time.sleep(wait)
-                    self._last_request_time = time.time()
+                    # Increase future pacing
+                    self._min_delay = min(15.0, self._min_delay + 2.0)
+                    print(f"  📊 Adjusted pacing to {self._min_delay:.0f}s/request")
+                    continue
+
+                if "block" in err or "safety" in err:
+                    print("  ⚠️  Content filtered — retrying with shorter prompt…")
+                    full_prompt = full_prompt[:2000]
                     continue
 
                 print(f"  ❌ Gemini error: {exc}")
+                if attempt < retries - 1:
+                    time.sleep(10)
+                    continue
                 return ""
 
-        print("  ❌ Gemini: max retries exceeded")
+        print(f"  ❌ Failed after {retries} attempts")
         return ""
 
     # ------------------------------------------------------------------
@@ -138,12 +204,7 @@ class GeminiClient:
     # ------------------------------------------------------------------
 
     def extract_json(self, text: str) -> dict:
-        """
-        Robustly extract a JSON object from a Gemini response.
-
-        Tries direct parse → markdown code block → largest brace block →
-        asks Gemini to repair it.
-        """
+        """Robustly extract a JSON object from a Gemini response."""
         if not text:
             return {}
 
@@ -159,8 +220,7 @@ class GeminiClient:
         for pattern in [r"```json\s*([\s\S]*?)\s*```", r"```\s*([\s\S]*?)\s*```"]:
             match = re.search(pattern, text)
             if match:
-                candidate = match.group(1).strip()
-                candidate = re.sub(r",\s*([}\]])", r"\1", candidate)  # trailing commas
+                candidate = self._clean_json(match.group(1).strip())
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:
@@ -180,21 +240,48 @@ class GeminiClient:
                     if len(candidate) > len(best):
                         best = candidate
         if best:
-            best = re.sub(r",\s*([}\]])", r"\1", best)
             try:
-                return json.loads(best)
+                return json.loads(self._clean_json(best))
             except json.JSONDecodeError:
                 pass
 
-        # 4. Ask Gemini to fix it
-        try:
-            fixed = self.generate(
-                "Return ONLY valid JSON. No markdown. No explanation. Fix the JSON below.",
-                text[:3000],
-                max_tokens=4096,
-            )
-            return json.loads(fixed.strip().lstrip("```json").lstrip("```").rstrip("```"))
-        except Exception:
-            pass
+        # 4. Ask Gemini to repair (costs 1 API call)
+        if len(text) > 50:
+            print("  ⚠️  Repairing JSON…")
+            try:
+                fixed = self.generate(
+                    "Return ONLY valid JSON. No markdown. No explanation. Fix the JSON below.",
+                    text[:3000],
+                    max_tokens=4096,
+                )
+                fixed = fixed.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+                return json.loads(fixed)
+            except Exception:
+                pass
 
         return {}
+
+    @staticmethod
+    def _clean_json(text: str) -> str:
+        """Fix common JSON issues: trailing commas, JS comments."""
+        text = re.sub(r",\s*([}\]])", r"\1", text)          # trailing commas
+        text = re.sub(r"//[^\n]*", "", text)                 # line comments
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)  # block comments
+        return text.strip()
+
+    # ------------------------------------------------------------------
+    # Stats
+    # ------------------------------------------------------------------
+
+    def get_stats(self) -> dict:
+        now = time.time()
+        recent = sum(1 for t in self._request_timestamps if t > now - 60)
+        return {
+            "model": self.model_name,
+            "sdk": self._sdk,
+            "requests_last_minute": recent,
+            "rpm_limit": self._rpm_limit,
+            "daily_count": self._daily_count,
+            "daily_limit": self._daily_limit,
+            "pacing": f"{self._min_delay:.0f}s between requests",
+        }
