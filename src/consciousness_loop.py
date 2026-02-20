@@ -25,7 +25,7 @@ import google.generativeai as genai
 
 from nexus_core import NexusCore
 
-_MODEL = "gemini-2.0-flash"
+_MODEL = "gemini-2.5-flash"
 
 
 class ConsciousnessLoop:

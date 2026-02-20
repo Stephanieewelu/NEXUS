@@ -82,7 +82,7 @@ class BuildOrchestrator:
         workspace_root: str = "./workspace",
     ):
         genai.configure(api_key=api_key)
-        self._model_name = "gemini-2.0-flash"
+        self._model_name = "gemini-2.5-flash"
         self.fs = FileSystemTool(workspace_root=workspace_root)
         self.terminal = TerminalTool(default_cwd=workspace_root)
         self.git = GitManager(self.terminal)
