@@ -24,7 +24,7 @@ from typing import Optional
 from gemini_client import GeminiClient
 from nexus_core import NexusCore
 
-_DEFAULT_MODEL = "gemini-2.5-flash"
+_DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 
 class ConsciousnessLoop:

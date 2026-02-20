@@ -24,7 +24,7 @@ class GeminiClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.0-flash",
+        model: Optional[str] = None,
     ):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         if not self.api_key:
@@ -34,7 +34,7 @@ class GeminiClient:
                 "Get a free key at https://aistudio.google.com/apikey"
             )
 
-        self.model_name = model
+        self.model_name = model or os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
         # ── Smart rate limiting state ──
         self._request_timestamps: deque = deque(maxlen=20)
