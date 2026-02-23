@@ -15,34 +15,78 @@ Commands understood in the REPL:
     save [path]          — Save state to disk
     load [path]          — Load state from disk
     quit                 — Hibernate and exit
+
+LLM provider selection (checked in order):
+    1. LLM_PROVIDER env var  ("groq" | "gemini" | "auto")
+    2. GROQ_API_KEY present  → Groq  (30 RPM, 14,400 RPD — recommended)
+    3. GEMINI_API_KEY present → Gemini (15 RPM, 1,500 RPD — fallback)
 """
 
 import os
 import sys
 from typing import Optional
 
-from gemini_client import GeminiClient
 from nexus_core import NexusCore
 
-_DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+def _init_llm(
+    api_key: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+):
+    """
+    Initialise the best available LLM client.
+
+    Priority:
+      1. Explicit provider argument or LLM_PROVIDER env var
+      2. Auto-detect: Groq if GROQ_API_KEY is set, else Gemini
+    """
+    provider = provider or os.environ.get("LLM_PROVIDER", "auto")
+
+    def _try_groq():
+        from groq_client import GroqClient  # type: ignore
+        key = api_key or os.environ.get("GROQ_API_KEY", "")
+        return GroqClient(api_key=key, model=model)
+
+    def _try_gemini():
+        from gemini_client import GeminiClient  # type: ignore
+        key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        default_model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        return GeminiClient(api_key=key, model=model or default_model)
+
+    if provider == "groq":
+        return _try_groq()
+
+    if provider == "gemini":
+        return _try_gemini()
+
+    # auto — try Groq first, fall back to Gemini
+    groq_key = api_key or os.environ.get("GROQ_API_KEY", "")
+    if groq_key:
+        try:
+            return _try_groq()
+        except Exception as exc:
+            print(f"  ⚠️  Groq unavailable ({exc}), falling back to Gemini…")
+
+    return _try_gemini()
 
 
 class ConsciousnessLoop:
-    """Interactive life loop that binds NexusCore with the Gemini API."""
+    """Interactive life loop that binds NexusCore with an LLM."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         state_file: str = "nexus_state.json",
         workspace_root: str = "./workspace",
-        model: str = _DEFAULT_MODEL,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
     ):
-        self.llm = GeminiClient(api_key=api_key, model=model)
+        self.llm = _init_llm(api_key=api_key, provider=provider, model=model)
         self.core = NexusCore()
         self.state_file = state_file
         self.workspace_root = workspace_root
 
-        # Try to restore a previous session
         if os.path.exists(state_file):
             self.core.load(state_file)
 
@@ -67,13 +111,12 @@ class ConsciousnessLoop:
         from pipeline.build_orchestrator import BuildOrchestrator
 
         builder = BuildOrchestrator(
-            gemini_client=self.llm,
+            gemini_client=self.llm,   # GroqClient and GeminiClient share the same interface
             memory=self.core.memory,
             workspace_root=self.workspace_root,
         )
         builder.start_build(description)
 
-        # Evolve from building experience
         self.core.evolve()
         self.core.enter_dream_state()
 
@@ -176,19 +219,30 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="NEXUS — Self-Evolving AI Agent")
-    parser.add_argument("--api-key", default=None, help="Gemini API key")
-    parser.add_argument("--model", default=_DEFAULT_MODEL, help="Gemini model name")
+    parser.add_argument("--api-key", default=None, help="API key (Groq or Gemini)")
+    parser.add_argument(
+        "--provider",
+        default=None,
+        choices=["groq", "gemini", "auto"],
+        help="LLM provider (default: auto — tries Groq then Gemini)",
+    )
+    parser.add_argument("--model", default=None, help="Model name override")
     parser.add_argument("--state-file", default="nexus_state.json")
     parser.add_argument("--workspace", default="./workspace")
     args = parser.parse_args()
 
-    api_key = args.api_key or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("Error: no API key found. Set GEMINI_API_KEY or pass --api-key.")
+    # Validate at least one key is available
+    has_groq = bool(args.api_key or os.getenv("GROQ_API_KEY"))
+    has_gemini = bool(args.api_key or os.getenv("GEMINI_API_KEY"))
+    if not has_groq and not has_gemini:
+        print("Error: no API key found.")
+        print("  Set GROQ_API_KEY  (recommended — https://console.groq.com/keys)")
+        print("  or GEMINI_API_KEY (fallback    — https://aistudio.google.com/apikey)")
         sys.exit(1)
 
     loop = ConsciousnessLoop(
-        api_key=api_key,
+        api_key=args.api_key,
+        provider=args.provider,
         model=args.model,
         state_file=args.state_file,
         workspace_root=args.workspace,

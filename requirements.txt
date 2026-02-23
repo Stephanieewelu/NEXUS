@@ -1,7 +1,10 @@
-# Preferred: new Google GenAI SDK
-google-genai>=0.3.0
+# Primary LLM provider — free, fast, generous limits (recommended)
+groq>=0.9.0
 
-# Legacy fallback (used automatically if google-genai is unavailable)
+# Fallback LLM provider — free tier with tighter limits
+# Preferred new SDK:
+google-genai>=0.3.0
+# Legacy fallback (auto-detected if google-genai unavailable):
 google-generativeai>=0.8.0
 
 PyYAML>=6.0
