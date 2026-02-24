@@ -205,21 +205,35 @@ class BuildOrchestrator:
     def _phase_architecture(self, reqs: dict) -> dict:
         print("\n🏛️  Phase 2: Designing Architecture...")
 
-        system = """Design the app architecture. Return ONLY valid JSON:
-{
+        # Detect if user description explicitly mentions Python / FastAPI
+        desc_lower = json.dumps(reqs).lower()
+        python_requested = any(w in desc_lower for w in
+                               ["python", "fastapi", "flask", "django", "sqlalchemy"])
+
+        system = f"""Design the app architecture. Return ONLY valid JSON:
+{{
     "structure": "single|fullstack-split",
     "frontend_framework": "next.js|react-vite",
     "backend_framework": "next.js-api|fastapi|express",
     "database": "sqlite|postgresql",
     "auth": "jwt|session|none"
-}
-Use "single" (Next.js) unless the user specifically asked for a Python/FastAPI backend.
-Use "fullstack-split" only when a Python backend is clearly required."""
+}}
+IMPORTANT DEFAULT: ALWAYS use "single" (Next.js fullstack) UNLESS the user
+explicitly mentioned Python, FastAPI, Flask, or Django.
+{"Python/FastAPI was detected — fullstack-split is allowed." if python_requested else
+ "No Python backend was requested — you MUST use structure=single."}"""
 
         result = self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
         arch = self.llm.extract_json(result)
-        self.project["architecture"] = arch
 
+        # Safety: enforce "single" if Python was not requested
+        if not python_requested and arch.get("structure") == "fullstack-split":
+            print("   ⚠️  LLM chose fullstack-split without Python request — overriding to single")
+            arch["structure"] = "single"
+            arch["frontend_framework"] = "next.js"
+            arch["backend_framework"] = "next.js-api"
+
+        self.project["architecture"] = arch
         print(f"   ✅ Structure: {arch.get('structure', '?')}")
         print(f"   ✅ Frontend: {arch.get('frontend_framework', '?')}")
         print(f"   ✅ Backend: {arch.get('backend_framework', '?')}")
@@ -505,10 +519,27 @@ export default {
 
         # ── Step 1: generate a file blueprint ──
         print("   🗺️  Creating file blueprint…")
-        structure_desc = (
-            "frontend/ (React+Vite+TypeScript) and backend/ (FastAPI+Python)"
-            if is_split else "single Next.js TypeScript app"
-        )
+        if is_split:
+            structure_desc = "frontend/ (React+Vite+TypeScript) and backend/ (FastAPI+Python)"
+            path_rules = (
+                "- Frontend files: frontend/src/**/*.{tsx,ts,css}\n"
+                "- Backend files: backend/**/*.py\n"
+                "- NO files should go in src/ directly"
+            )
+            example_path = "frontend/src/main.tsx"
+        else:
+            structure_desc = "single Next.js 14 TypeScript app (App Router)"
+            path_rules = (
+                "- ALL page files: src/app/**/page.tsx\n"
+                "- ALL component files: src/components/**/*.tsx\n"
+                "- API routes: src/app/api/**/route.ts\n"
+                "- Utilities: src/lib/**/*.ts\n"
+                "- Types: src/types/**/*.ts\n"
+                "- Global styles: src/app/globals.css\n"
+                "- NEVER use frontend/ or backend/ prefixes — those folders do not exist"
+            )
+            example_path = "src/app/page.tsx"
+
         bp_system = f"""You are building this app:
 {json.dumps(reqs, indent=2)[:2000]}
 Project structure: {structure_desc}
@@ -517,16 +548,17 @@ List ALL files that need to be created. Output ONLY valid JSON:
 {{
     "files": [
         {{
-            "path": "frontend/src/main.tsx",
-            "purpose": "React entry point",
+            "path": "{example_path}",
+            "purpose": "description of this file",
             "category": "frontend-core|frontend-page|frontend-component|backend-core|backend-api|backend-model|config"
         }}
     ]
 }}
-RULES:
+PATH RULES (CRITICAL — violating these breaks the build):
+{path_rules}
+OTHER RULES:
 - ONE file per purpose — NO duplicates
-- Consistent import paths throughout
-- backend/ files for Python, frontend/ files for React/TS"""
+- Consistent import paths throughout"""
 
         bp_result = self.llm.generate(bp_system, "Generate the complete file list.")
         blueprint = self.llm.extract_json(bp_result)
@@ -535,6 +567,22 @@ RULES:
             blueprint = self._default_blueprint(reqs, is_split)
 
         file_list = blueprint.get("files", [])
+
+        # Safety: for single-app, correct any stray frontend/ or backend/ prefixes
+        if not is_split:
+            corrected = []
+            for f in file_list:
+                p = f.get("path", "")
+                if p.startswith("frontend/src/"):
+                    p = p[len("frontend/"):]   # frontend/src/foo → src/foo
+                    f = {**f, "path": p}
+                    print(f"   🔧 Path corrected: {f['path']}")
+                elif p.startswith("backend/"):
+                    print(f"   ⏭️  Skipping backend path in single-app: {p}")
+                    continue
+                corrected.append(f)
+            file_list = corrected
+
         print(f"   📋 Blueprint: {len(file_list)} files planned")
 
         # ── Step 2: generate code in batches of 5 ──
