@@ -466,6 +466,11 @@ export default {
                 "next": "^14.2.5",
                 "react": "^18.3.1",
                 "react-dom": "^18.3.1",
+                "axios": "^1.7.4",
+                "clsx": "^2.1.1",
+                "lucide-react": "^0.400.0",
+                "tailwind-merge": "^2.4.0",
+                "zod": "^3.23.8",
             },
             "devDependencies": {
                 "@types/node": "^20",
@@ -825,8 +830,18 @@ RULES:
 
             self.git.commit(project_path, f"Bug fix attempt {attempt + 1}")
 
-            if not os.path.exists(os.path.join(build_dir, "node_modules")):
-                self.terminal.run("npm install", cwd=build_dir, timeout=180)
+            # Always run npm install if package.json was among the fixes,
+            # or if node_modules is missing — new deps won't take effect otherwise
+            pkg_was_fixed = any(
+                f.get("path", "").endswith("package.json")
+                for f in (fix_data.get("fixes", []) if fix_data else [])
+            )
+            if pkg_was_fixed or not os.path.exists(os.path.join(build_dir, "node_modules")):
+                reason = "package.json updated" if pkg_was_fixed else "node_modules missing"
+                print(f"   📦 Running npm install ({reason})…")
+                _, inst_err, inst_code = self.terminal.run("npm install", cwd=build_dir, timeout=180)
+                if inst_code != 0:
+                    print(f"   ⚠️  npm install warning: {inst_err[:100]}")
 
             stdout, stderr, code = self.terminal.run("npm run build 2>&1", cwd=build_dir, timeout=120)
             if code == 0:
