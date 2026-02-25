@@ -873,7 +873,7 @@ RULES:
 - If an import refers to a missing file, create that file too
 - This is a Next.js 14 APP ROUTER project (src/app/ directory)
 - NEVER create files inside pages/ — that is the Pages Router and does NOT apply here
-- If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)
+- If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)"""
 
             result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=8192)
             fix_data = self.llm.extract_json(result)
