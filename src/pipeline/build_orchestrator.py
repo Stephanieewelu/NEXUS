@@ -1,5 +1,5 @@
 """
-build_orchestrator.py — Master controller for the NEXUS app-building pipeline.
+build_orchestrator.py  -  Master controller for the NEXUS app-building pipeline.
 
 Uses Gemini as the "brain" and the tool modules as the "hands" to plan,
 scaffold, implement, test, debug, document, and deploy applications
@@ -100,7 +100,7 @@ class BuildOrchestrator:
 
     def start_build(self, user_description: str) -> str:
         print("\n" + "=" * 60)
-        print("  🏗️  NEXUS APP BUILDER — Starting New Build")
+        print("  🏗️  NEXUS APP BUILDER  -  Starting New Build")
         print("=" * 60)
 
         try:
@@ -159,7 +159,7 @@ class BuildOrchestrator:
             return f"Build failed: {exc}"
 
     # ------------------------------------------------------------------
-    # Phase 1 — Requirements
+    # Phase 1  -  Requirements
     # ------------------------------------------------------------------
 
     def _phase_requirements(self, description: str) -> dict:
@@ -199,7 +199,7 @@ class BuildOrchestrator:
         return reqs
 
     # ------------------------------------------------------------------
-    # Phase 2 — Architecture
+    # Phase 2  -  Architecture
     # ------------------------------------------------------------------
 
     def _phase_architecture(self, reqs: dict) -> dict:
@@ -220,15 +220,15 @@ class BuildOrchestrator:
 }}
 IMPORTANT DEFAULT: ALWAYS use "single" (Next.js fullstack) UNLESS the user
 explicitly mentioned Python, FastAPI, Flask, or Django.
-{"Python/FastAPI was detected — fullstack-split is allowed." if python_requested else
- "No Python backend was requested — you MUST use structure=single."}"""
+{"Python/FastAPI was detected  -  fullstack-split is allowed." if python_requested else
+ "No Python backend was requested  -  you MUST use structure=single."}"""
 
         result = self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
         arch = self.llm.extract_json(result)
 
         # Safety: enforce "single" if Python was not requested
         if not python_requested and arch.get("structure") == "fullstack-split":
-            print("   ⚠️  LLM chose fullstack-split without Python request — overriding to single")
+            print("   ⚠️  LLM chose fullstack-split without Python request  -  overriding to single")
             arch["structure"] = "single"
             arch["frontend_framework"] = "next.js"
             arch["backend_framework"] = "next.js-api"
@@ -240,7 +240,7 @@ explicitly mentioned Python, FastAPI, Flask, or Django.
         return arch
 
     # ------------------------------------------------------------------
-    # Phase 3 — Tech stack
+    # Phase 3  -  Tech stack
     # ------------------------------------------------------------------
 
     def _phase_tech_stack(self, reqs: dict, arch: dict) -> dict:
@@ -272,7 +272,7 @@ explicitly mentioned Python, FastAPI, Flask, or Django.
         return tech
 
     # ------------------------------------------------------------------
-    # Phase 4 — Scaffolding
+    # Phase 4  -  Scaffolding
     # ------------------------------------------------------------------
 
     def _phase_scaffold(self, reqs: dict, arch: dict, tech: dict) -> str:
@@ -304,7 +304,7 @@ explicitly mentioned Python, FastAPI, Flask, or Django.
         for d in [frontend_path, backend_path]:
             self.fs.create_directory(d)
 
-        # ── frontend/package.json — must exist BEFORE npm install ──
+        # ── frontend/package.json  -  must exist BEFORE npm install ──
         pkg = {
             "name": f"{app_name}-frontend",
             "private": True,
@@ -514,7 +514,7 @@ export default {
         print(f"   {'✅' if code == 0 else '⚠️ '} npm install {'OK' if code == 0 else stderr[:100]}")
 
     # ------------------------------------------------------------------
-    # Phase 5 — Implementation (blueprint-first, no duplicates)
+    # Phase 5  -  Implementation (blueprint-first, no duplicates)
     # ------------------------------------------------------------------
 
     def _phase_implement(self, project_path: str, reqs: dict, arch: dict, tech: dict):
@@ -542,8 +542,8 @@ export default {
                 "- Utilities: src/lib/**/*.ts\n"
                 "- Types: src/types/**/*.ts\n"
                 "- Global styles: src/app/globals.css\n"
-                "- NEVER create a pages/ directory — this is App Router, not Pages Router\n"
-                "- NEVER use frontend/ or backend/ prefixes — those folders do not exist"
+                "- NEVER create a pages/ directory  -  this is App Router, not Pages Router\n"
+                "- NEVER use frontend/ or backend/ prefixes  -  those folders do not exist"
             )
             example_path = "src/app/page.tsx"
 
@@ -561,10 +561,10 @@ List ALL files that need to be created. Output ONLY valid JSON:
         }}
     ]
 }}
-PATH RULES (CRITICAL — violating these breaks the build):
+PATH RULES (CRITICAL  -  violating these breaks the build):
 {path_rules}
 OTHER RULES:
-- ONE file per purpose — NO duplicates
+- ONE file per purpose  -  NO duplicates
 - Consistent import paths throughout"""
 
         bp_result = self.llm.generate(bp_system, "Generate the complete file list.")
@@ -590,7 +590,7 @@ OTHER RULES:
                 corrected.append(f)
             file_list = corrected
 
-        # Safety: for Next.js App Router, layout.tsx is mandatory — inject if missing
+        # Safety: for Next.js App Router, layout.tsx is mandatory  -  inject if missing
         if not is_split:
             has_layout = any(f.get("path") == "src/app/layout.tsx" for f in file_list)
             if not has_layout:
@@ -638,9 +638,13 @@ Output ONLY valid JSON:
     ]
 }}
 RULES:
-- Write COMPLETE code — no placeholders, no "// TODO"
+- Write COMPLETE code  -  no placeholders, no "// TODO"
 - TypeScript for frontend, Python for backend
-- All imports must reference files in the blueprint"""
+- All imports must reference files in the blueprint
+- API routes (src/app/api/**/route.ts) MUST use hardcoded mock data arrays  -  never import
+  database packages (pg, mysql2, mongodb, prisma, drizzle, sequelize, typeorm, sqlite3, etc.)
+- Components that use useState/useEffect MUST have "use client" as the very first line
+- Page files (page.tsx) must be Server Components by default  -  move interactivity to child components"""
 
             result = self.llm.generate(
                 gen_system,
@@ -749,7 +753,7 @@ RULES:
                 files.append({"path": f"{prefix}src/pages/{name}.tsx",
                                "purpose": page.get("description", ""), "category": "frontend-page"})
         else:
-            # Next.js 14 App Router — layout.tsx is mandatory
+            # Next.js 14 App Router  -  layout.tsx is mandatory
             files = [
                 {"path": "src/app/layout.tsx", "purpose": "Root layout (required by App Router)", "category": "frontend-core"},
                 {"path": "src/app/globals.css", "purpose": "Global styles", "category": "config"},
@@ -766,7 +770,7 @@ RULES:
         return {"files": files}
 
     # ------------------------------------------------------------------
-    # Phase 6 — Styling
+    # Phase 6  -  Styling
     # ------------------------------------------------------------------
 
     def _phase_styling(self, project_path: str, reqs: dict, tech: dict):
@@ -777,7 +781,7 @@ RULES:
 
         css = self.llm.generate(
             f"Generate a complete Tailwind CSS file for '{reqs.get('display_name', '')}'. "
-            "Output ONLY raw CSS — no markdown, no explanation. "
+            "Output ONLY raw CSS  -  no markdown, no explanation. "
             "Include @tailwind directives, CSS variables, dark mode, animations.",
             "Generate the CSS.",
         )
@@ -793,7 +797,7 @@ RULES:
         print("   ✅ Styling complete!")
 
     # ------------------------------------------------------------------
-    # Phase 7 — Testing (builds in the CORRECT directory)
+    # Phase 7  -  Testing (builds in the CORRECT directory)
     # ------------------------------------------------------------------
 
     def _phase_test(self, project_path: str, tech: dict):
@@ -827,7 +831,7 @@ RULES:
         return False, errors
 
     # ------------------------------------------------------------------
-    # Phase 8 — Debugging (reads the correct files)
+    # Phase 8  -  Debugging (reads the correct files)
     # ------------------------------------------------------------------
 
     def _phase_debug(self, project_path: str, tech: dict, errors: str, max_attempts: int = 5):
@@ -839,6 +843,39 @@ RULES:
             if is_split
             else project_path
         )
+
+        # Named-error pre-check: unresolvable external DB/native modules in API routes.
+        # When the LLM imports pg, mysql2, mongodb, etc. the build fails with
+        # "Module not found: Can't resolve 'X'".  Rewrite every affected route to
+        # use inline mock data so no external package is needed.
+        _DB_PACKAGES = {"pg", "mysql2", "mongodb", "prisma", "@prisma/client",
+                        "drizzle-orm", "sequelize", "typeorm", "sqlite3", "better-sqlite3"}
+        _mod_not_found = re.findall(r"Can't resolve '([^']+)'", errors)
+        _missing_db = [m for m in _mod_not_found if m.split("/")[0] in _DB_PACKAGES]
+        if _missing_db:
+            print(f"   🔧 Pre-fix: replacing DB imports ({', '.join(_missing_db)}) with mock data")
+            # Find all API route files and strip the DB imports, replacing with mock arrays
+            api_dir = os.path.join(project_path, "src", "app", "api")
+            if os.path.isdir(api_dir):
+                for root_dir, _dirs, files in os.walk(api_dir):
+                    for fname in files:
+                        if fname == "route.ts":
+                            fpath = os.path.join(root_dir, fname)
+                            content = self.fs.read_file(fpath) or ""
+                            if any(pkg in content for pkg in _missing_db):
+                                # Ask LLM to rewrite just this one file with mock data
+                                rel = fpath.replace(project_path + os.sep, "").replace(project_path + "/", "")
+                                mock_fix = self.llm.generate(
+                                    f"Rewrite this Next.js API route to use hardcoded mock data "
+                                    f"instead of any database package. Output ONLY the raw TypeScript "
+                                    f"file content, no markdown fences.\n\nCURRENT FILE ({rel}):\n{content[:3000]}",
+                                    "Rewrite with mock data.",
+                                    max_tokens=4096,
+                                )
+                                mock_fix = mock_fix.strip().lstrip("```typescript").lstrip("```ts").lstrip("```").rstrip("```").strip()
+                                if mock_fix:
+                                    self.fs.write_file(fpath, mock_fix)
+                                    print(f"   🔧 Pre-fix rewritten: {rel}")
 
         # Named-error pre-check: missing root layout in Next.js App Router
         # The LLM habitually creates pages/_app.tsx instead of src/app/layout.tsx,
@@ -897,12 +934,15 @@ Output ONLY valid JSON:
     ]
 }}
 RULES:
-- Provide COMPLETE file content — not just the changed lines
+- Provide COMPLETE file content  -  not just the changed lines
 - Fix ALL errors in one pass
 - If an import refers to a missing file, create that file too
 - This is a Next.js 14 APP ROUTER project (src/app/ directory)
-- NEVER create files inside pages/ — that is the Pages Router and does NOT apply here
-- If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)"""
+- NEVER create files inside pages/  -  that is the Pages Router and does NOT apply here
+- If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)
+- NEVER import database packages (pg, mysql2, mongodb, prisma, drizzle-orm, etc.) in API routes
+   -  use hardcoded mock data arrays instead
+- Components using useState/useEffect MUST start with "use client" as the very first line"""
 
             result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=8192)
             fix_data = self.llm.extract_json(result)
@@ -921,7 +961,7 @@ RULES:
             self.git.commit(project_path, f"Bug fix attempt {attempt + 1}")
 
             # Always run npm install if package.json was among the fixes,
-            # or if node_modules is missing — new deps won't take effect otherwise
+            # or if node_modules is missing  -  new deps won't take effect otherwise
             pkg_was_fixed = any(
                 f.get("path", "").endswith("package.json")
                 for f in (fix_data.get("fixes", []) if fix_data else [])
@@ -956,7 +996,7 @@ RULES:
         return list(found)[:10]
 
     # ------------------------------------------------------------------
-    # Phase 10 — Documentation
+    # Phase 10  -  Documentation
     # ------------------------------------------------------------------
 
     def _phase_docs(self, project_path: str, reqs: dict, tech: dict):
@@ -983,7 +1023,7 @@ RULES:
         print("   ✅ Docs generated!")
 
     # ------------------------------------------------------------------
-    # Phase 11 — Deployment
+    # Phase 11  -  Deployment
     # ------------------------------------------------------------------
 
     def _phase_deploy(self, project_path: str, tech: dict) -> dict:
