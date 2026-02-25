@@ -535,12 +535,14 @@ export default {
         else:
             structure_desc = "single Next.js 14 TypeScript app (App Router)"
             path_rules = (
+                "- REQUIRED: src/app/layout.tsx  ← root layout (MUST be included, build fails without it)\n"
                 "- ALL page files: src/app/**/page.tsx\n"
                 "- ALL component files: src/components/**/*.tsx\n"
                 "- API routes: src/app/api/**/route.ts\n"
                 "- Utilities: src/lib/**/*.ts\n"
                 "- Types: src/types/**/*.ts\n"
                 "- Global styles: src/app/globals.css\n"
+                "- NEVER create a pages/ directory — this is App Router, not Pages Router\n"
                 "- NEVER use frontend/ or backend/ prefixes — those folders do not exist"
             )
             example_path = "src/app/page.tsx"
@@ -587,6 +589,17 @@ OTHER RULES:
                     continue
                 corrected.append(f)
             file_list = corrected
+
+        # Safety: for Next.js App Router, layout.tsx is mandatory — inject if missing
+        if not is_split:
+            has_layout = any(f.get("path") == "src/app/layout.tsx" for f in file_list)
+            if not has_layout:
+                file_list.insert(0, {
+                    "path": "src/app/layout.tsx",
+                    "purpose": "Root layout (required by Next.js App Router)",
+                    "category": "frontend-core",
+                })
+                print("   🔧 Injected required: src/app/layout.tsx")
 
         print(f"   📋 Blueprint: {len(file_list)} files planned")
 
@@ -695,16 +708,32 @@ RULES:
         return "\n".join(lines)
 
     def _default_blueprint(self, reqs: dict, is_split: bool) -> dict:
-        prefix = "frontend/" if is_split else ""
-        files = [
-            {"path": f"{prefix}src/main.tsx", "purpose": "React entry", "category": "frontend-core"},
-            {"path": f"{prefix}src/App.tsx", "purpose": "Root component", "category": "frontend-core"},
-            {"path": f"{prefix}src/index.css", "purpose": "Global styles", "category": "config"},
-        ]
-        for page in reqs.get("pages", []):
-            name = re.sub(r"[^a-zA-Z0-9]", "", page["name"])
-            files.append({"path": f"{prefix}src/pages/{name}.tsx",
-                           "purpose": page.get("description", ""), "category": "frontend-page"})
+        if is_split:
+            prefix = "frontend/"
+            files = [
+                {"path": f"{prefix}src/main.tsx", "purpose": "React entry", "category": "frontend-core"},
+                {"path": f"{prefix}src/App.tsx", "purpose": "Root component", "category": "frontend-core"},
+                {"path": f"{prefix}src/index.css", "purpose": "Global styles", "category": "config"},
+            ]
+            for page in reqs.get("pages", []):
+                name = re.sub(r"[^a-zA-Z0-9]", "", page["name"])
+                files.append({"path": f"{prefix}src/pages/{name}.tsx",
+                               "purpose": page.get("description", ""), "category": "frontend-page"})
+        else:
+            # Next.js 14 App Router — layout.tsx is mandatory
+            files = [
+                {"path": "src/app/layout.tsx", "purpose": "Root layout (required by App Router)", "category": "frontend-core"},
+                {"path": "src/app/globals.css", "purpose": "Global styles", "category": "config"},
+                {"path": "src/app/page.tsx", "purpose": "Home page", "category": "frontend-page"},
+            ]
+            for page in reqs.get("pages", []):
+                name = re.sub(r"[^a-zA-Z0-9-]", "-", page["name"]).lower().strip("-")
+                if name and name != "home":
+                    files.append({
+                        "path": f"src/app/{name}/page.tsx",
+                        "purpose": page.get("description", ""),
+                        "category": "frontend-page",
+                    })
         return {"files": files}
 
     # ------------------------------------------------------------------
@@ -782,6 +811,35 @@ RULES:
             else project_path
         )
 
+        # Named-error pre-check: missing root layout in Next.js App Router
+        # The LLM habitually creates pages/_app.tsx instead of src/app/layout.tsx,
+        # so we detect and fix this before any LLM round-trip.
+        if "doesn't have a root layout" in errors or "does not have a root layout" in errors:
+            layout_path = os.path.join(project_path, "src", "app", "layout.tsx")
+            if not os.path.exists(layout_path):
+                print("   🔧 Pre-fix: creating missing src/app/layout.tsx")
+                layout_content = (
+                    'import type { Metadata } from "next";\n'
+                    'import "./globals.css";\n\n'
+                    'export const metadata: Metadata = {\n'
+                    '  title: "App",\n'
+                    '  description: "Built with NEXUS",\n'
+                    "};\n\n"
+                    "export default function RootLayout({\n"
+                    "  children,\n"
+                    "}: {\n"
+                    "  children: React.ReactNode;\n"
+                    "}) {\n"
+                    "  return (\n"
+                    '    <html lang="en">\n'
+                    "      <body>{children}</body>\n"
+                    "    </html>\n"
+                    "  );\n"
+                    "}\n"
+                )
+                self.fs.write_file(layout_path, layout_content)
+                self.generated_files["src/app/layout.tsx"] = layout_content
+
         current_errors = errors
         for attempt in range(max_attempts):
             print(f"\n   🔄 Fix attempt {attempt + 1}/{max_attempts}")
@@ -812,7 +870,10 @@ Output ONLY valid JSON:
 RULES:
 - Provide COMPLETE file content — not just the changed lines
 - Fix ALL errors in one pass
-- If an import refers to a missing file, create that file too"""
+- If an import refers to a missing file, create that file too
+- This is a Next.js 14 APP ROUTER project (src/app/ directory)
+- NEVER create files inside pages/ — that is the Pages Router and does NOT apply here
+- If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)
 
             result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=8192)
             fix_data = self.llm.extract_json(result)
