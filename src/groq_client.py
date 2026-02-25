@@ -1,12 +1,15 @@
 """
-groq_client.py — Groq LLM client for NEXUS.
+groq_client.py - Groq LLM client for NEXUS.
 
 Drop-in replacement for GeminiClient (same .generate() / .extract_json() interface).
 
 Free tier (2025):
-  llama-3.3-70b-versatile:  30 RPM, 14,400 RPD, 131K context
-  llama-3.1-8b-instant:     30 RPM, 14,400 RPD, 131K context (faster)
-  mixtral-8x7b-32768:       30 RPM, 14,400 RPD, 32K context
+  llama-3.3-70b-versatile:  30 RPM, 14,400 TPM, 14,400 RPD, 131K context
+  llama-3.1-8b-instant:     30 RPM, 14,400 TPM, 14,400 RPD, 131K context (faster)
+  mixtral-8x7b-32768:       30 RPM, 14,400 TPM, 14,400 RPD, 32K context
+
+The real bottleneck is TOKENS PER MINUTE (14,400 TPM), not RPM.
+With max_tokens=8192, only 1-2 requests fit per minute.
 """
 
 import json
@@ -18,7 +21,7 @@ from typing import Optional
 
 
 class GroqClient:
-    """Groq client — free, fast, generous limits."""
+    """Groq client - free, fast, TPM-aware pacing."""
 
     def __init__(
         self,
@@ -35,32 +38,36 @@ class GroqClient:
 
         self.model_name = model or os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-        # ── Rate limiting (generous but safe) ──
+        # RPM tracking
         self._request_timestamps: deque = deque(maxlen=40)
         self._rpm_limit = 25          # stay under 30 RPM
         self._min_delay = 2.5         # seconds between requests
+
+        # Daily tracking
         self._daily_count = 0
-        self._daily_limit = 14000     # stay under 14,400 RPD
+        self._daily_limit = 14000
         self._day_start = time.time()
 
-        # ── Token tracking ──
+        # TPM tracking - this is the REAL bottleneck on the free tier
+        self._tpm_limit = 14400       # tokens per minute (free tier)
+        self._tpm_buffer = 0.85       # use at most 85% of the window to be safe
         self._tokens_this_minute = 0
         self._token_window_start = time.time()
 
         try:
             from groq import Groq  # type: ignore
             self._client = Groq(api_key=self.api_key)
-            print(f"  ✅ Groq ready — {self.model_name}")
-            print(f"     Limits: {self._rpm_limit} RPM, {self._daily_limit} RPD, {self._min_delay}s pacing")
+            print(f"  ✅ Groq ready - {self.model_name}")
+            print(f"     Limits: {self._rpm_limit} RPM, {self._tpm_limit} TPM, {self._daily_limit} RPD")
         except ImportError:
             raise ImportError("Groq SDK not found. Run: pip install groq")
 
     # ------------------------------------------------------------------
-    # Smart rate limiting
+    # Smart rate limiting (TPM-aware)
     # ------------------------------------------------------------------
 
-    def _smart_rate_limit(self):
-        """Proactively pace requests to prevent 429s."""
+    def _smart_rate_limit(self, estimated_tokens: int = 3000):
+        """Proactively pace requests to stay under both RPM and TPM limits."""
         now = time.time()
 
         # Daily reset
@@ -70,28 +77,46 @@ class GroqClient:
 
         # Daily cap
         if self._daily_count >= self._daily_limit:
-            print("  🛑 Daily limit approaching — waiting 5 min…")
+            print("  🛑 Daily limit approaching - waiting 5 min...")
             time.sleep(300)
             self._daily_count = 0
             self._day_start = time.time()
+            now = time.time()
 
-        # Minimum gap
+        # TPM window reset
+        window_age = now - self._token_window_start
+        if window_age >= 60:
+            self._tokens_this_minute = 0
+            self._token_window_start = now
+            window_age = 0
+
+        # TPM check: wait for window reset if we'd exceed the budget
+        budget = int(self._tpm_limit * self._tpm_buffer)
+        if self._tokens_this_minute + estimated_tokens > budget:
+            wait = 62 - window_age   # wait until the window resets + 2s buffer
+            if wait > 0:
+                print(f"  ⏳ TPM budget ({self._tokens_this_minute}/{budget} tokens): waiting {wait:.0f}s...")
+                time.sleep(wait)
+                self._tokens_this_minute = 0
+                self._token_window_start = time.time()
+
+        # Minimum gap between requests
         if self._request_timestamps:
-            elapsed = now - self._request_timestamps[-1]
+            elapsed = time.time() - self._request_timestamps[-1]
             if elapsed < self._min_delay:
                 wait = self._min_delay - elapsed
                 if wait > 1:
-                    print(f"  ⏳ Pacing: {wait:.0f}s…")
+                    print(f"  ⏳ Pacing: {wait:.0f}s...")
                 time.sleep(wait)
 
-        # RPM window
+        # RPM window check
         one_min_ago = time.time() - 60
         recent = [t for t in self._request_timestamps if t > one_min_ago]
         if len(recent) >= self._rpm_limit:
             oldest = min(recent)
             wait = 61 - (time.time() - oldest)
             if wait > 0:
-                print(f"  ⏳ RPM limit ({len(recent)}/{self._rpm_limit}): waiting {wait:.0f}s…")
+                print(f"  ⏳ RPM limit ({len(recent)}/{self._rpm_limit}): waiting {wait:.0f}s...")
                 time.sleep(wait)
 
         self._request_timestamps.append(time.time())
@@ -105,7 +130,7 @@ class GroqClient:
         self,
         system_prompt: str,
         user_message: str,
-        max_tokens: int = 8192,
+        max_tokens: int = 6000,
         retries: int = 3,
     ) -> str:
         """
@@ -114,15 +139,17 @@ class GroqClient:
         Args:
             system_prompt: System instruction / persona.
             user_message:  User turn content.
-            max_tokens:    Max output tokens (capped at 8192 for Groq).
+            max_tokens:    Max output tokens (default 6000, capped at 8192).
             retries:       Max attempts on transient errors.
 
         Returns:
             Model response as a plain string (empty on failure).
         """
-        self._smart_rate_limit()
+        # Estimate total tokens for TPM pacing (rough: 1 token ~= 4 chars)
+        estimated = (len(system_prompt) + len(user_message)) // 4 + max_tokens
+        self._smart_rate_limit(estimated_tokens=estimated)
 
-        # Truncate input if needed (~131K context, but be safe)
+        # Truncate input if needed
         max_input_chars = 100_000
         if len(system_prompt) + len(user_message) > max_input_chars:
             available = max_input_chars - len(system_prompt)
@@ -144,10 +171,10 @@ class GroqClient:
 
                 text = response.choices[0].message.content or ""
 
+                # Track actual tokens used for TPM accounting
                 if response.usage:
-                    self._tokens_this_minute += (
-                        response.usage.prompt_tokens + response.usage.completion_tokens
-                    )
+                    actual = response.usage.prompt_tokens + response.usage.completion_tokens
+                    self._tokens_this_minute += actual
 
                 return text
 
@@ -155,14 +182,22 @@ class GroqClient:
                 err = str(exc).lower()
 
                 if "429" in err or "rate" in err or "limit" in err:
-                    wait = 30 * (attempt + 1)   # 30s, 60s, 90s
-                    print(f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) — waiting {wait}s…")
+                    # Try to extract retry-after from the error message/headers
+                    retry_after = self._parse_retry_after(str(exc))
+                    if retry_after:
+                        wait = retry_after + 2
+                        print(f"  ⏳ Rate limited - API says wait {retry_after}s (attempt {attempt + 1}/{retries})")
+                    else:
+                        wait = 30 * (attempt + 1)   # fallback: 30s, 60s, 90s
+                        print(f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) - waiting {wait}s...")
                     time.sleep(wait)
-                    self._min_delay = min(10.0, self._min_delay + 1.0)
+                    # Reset TPM window so next call re-checks cleanly
+                    self._tokens_this_minute = 0
+                    self._token_window_start = time.time()
                     continue
 
                 if "context" in err or "token" in err:
-                    print("  ✂️  Input too long — halving and retrying…")
+                    print("  ✂️  Input too long - halving and retrying...")
                     user_message = user_message[: len(user_message) // 2]
                     continue
 
@@ -178,6 +213,21 @@ class GroqClient:
 
         print(f"  ❌ Failed after {retries} attempts")
         return ""
+
+    @staticmethod
+    def _parse_retry_after(error_text: str) -> Optional[int]:
+        """Extract retry-after seconds from a Groq 429 error message."""
+        # Groq often includes "Please try again in Xs" or "retry after X"
+        for pattern in [
+            r"try again in\s+(\d+(?:\.\d+)?)\s*s",
+            r"retry.{0,10}after\s+(\d+)",
+            r'"retry_after"\s*:\s*(\d+)',
+            r"wait\s+(\d+)\s*second",
+        ]:
+            m = re.search(pattern, error_text, re.IGNORECASE)
+            if m:
+                return max(1, int(float(m.group(1))))
+        return None
 
     # ------------------------------------------------------------------
     # JSON extraction (identical interface to GeminiClient)

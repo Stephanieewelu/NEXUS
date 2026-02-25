@@ -618,7 +618,7 @@ OTHER RULES:
 
         file_list.sort(key=sort_key)
 
-        batch_size = 5
+        batch_size = 3   # smaller batches = fewer tokens per call = less TPM pressure
         for i in range(0, len(file_list), batch_size):
             batch = file_list[i : i + batch_size]
             labels = [f["path"] for f in batch]
@@ -649,7 +649,7 @@ RULES:
             result = self.llm.generate(
                 gen_system,
                 f"Tech: {json.dumps(tech, indent=2)[:400]}",
-                max_tokens=8192,
+                max_tokens=6000,   # 6000 per batch of 3 = ~2000 tokens/file, fits in TPM window
             )
             data = self.llm.extract_json(result)
 
@@ -944,7 +944,7 @@ RULES:
    -  use hardcoded mock data arrays instead
 - Components using useState/useEffect MUST start with "use client" as the very first line"""
 
-            result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=8192)
+            result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=6000)
             fix_data = self.llm.extract_json(result)
 
             if fix_data and "fixes" in fix_data:
