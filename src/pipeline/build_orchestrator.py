@@ -667,6 +667,35 @@ RULES:
                 for f in batch:
                     self._generate_single_file(f, project_path, reqs, tech)
 
+        # Post-batch disk guarantee: src/app/layout.tsx MUST exist for Next.js App Router
+        if not is_split:
+            layout_disk = os.path.join(project_path, "src", "app", "layout.tsx")
+            if not os.path.exists(layout_disk):
+                print("   🔧 Post-batch safety: writing src/app/layout.tsx (was missing from batches)")
+                app_title = reqs.get("display_name", "App")
+                app_desc = reqs.get("summary", "Built with NEXUS")
+                layout_content = (
+                    'import type { Metadata } from "next";\n'
+                    'import "./globals.css";\n\n'
+                    'export const metadata: Metadata = {\n'
+                    f'  title: "{app_title}",\n'
+                    f'  description: "{app_desc}",\n'
+                    "};\n\n"
+                    "export default function RootLayout({\n"
+                    "  children,\n"
+                    "}: Readonly<{\n"
+                    "  children: React.ReactNode;\n"
+                    "}>) {\n"
+                    "  return (\n"
+                    '    <html lang="en">\n'
+                    "      <body>{children}</body>\n"
+                    "    </html>\n"
+                    "  );\n"
+                    "}\n"
+                )
+                self.fs.write_file(layout_disk, layout_content)
+                self.generated_files["src/app/layout.tsx"] = layout_content
+
         self.git.commit(project_path, "Core implementation complete")
         print(f"\n   ✅ Implementation complete! ({len(self.generated_files)} files)")
 
