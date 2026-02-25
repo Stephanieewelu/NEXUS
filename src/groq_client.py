@@ -50,7 +50,7 @@ class GroqClient:
 
         # TPM tracking - this is the REAL bottleneck on the free tier
         self._tpm_limit = 14400       # tokens per minute (free tier)
-        self._tpm_buffer = 0.85       # use at most 85% of the window to be safe
+        self._tpm_buffer = 0.65       # use at most 65% of budget; Groq uses a sliding window
         self._tokens_this_minute = 0
         self._token_window_start = time.time()
 
@@ -90,15 +90,15 @@ class GroqClient:
             self._token_window_start = now
             window_age = 0
 
-        # TPM check: wait for window reset if we'd exceed the budget
+        # TPM check: wait for window reset if we'd exceed the budget.
+        # Groq uses a sliding window, so always wait a full 65s when near the limit.
         budget = int(self._tpm_limit * self._tpm_buffer)
         if self._tokens_this_minute + estimated_tokens > budget:
-            wait = 62 - window_age   # wait until the window resets + 2s buffer
-            if wait > 0:
-                print(f"  ⏳ TPM budget ({self._tokens_this_minute}/{budget} tokens): waiting {wait:.0f}s...")
-                time.sleep(wait)
-                self._tokens_this_minute = 0
-                self._token_window_start = time.time()
+            wait = 65   # fixed full-window reset; sliding window means partial waits don't help
+            print(f"  ⏳ TPM budget ({self._tokens_this_minute}/{budget} tokens): waiting {wait}s...")
+            time.sleep(wait)
+            self._tokens_this_minute = 0
+            self._token_window_start = time.time()
 
         # Minimum gap between requests
         if self._request_timestamps:
@@ -182,13 +182,14 @@ class GroqClient:
                 err = str(exc).lower()
 
                 if "429" in err or "rate" in err or "limit" in err:
-                    # Try to extract retry-after from the error message/headers
+                    # Try to extract retry-after from the error message
                     retry_after = self._parse_retry_after(str(exc))
-                    if retry_after:
-                        wait = retry_after + 2
+                    if retry_after and retry_after < 120:
+                        wait = retry_after + 5   # API-suggested wait + small buffer
                         print(f"  ⏳ Rate limited - API says wait {retry_after}s (attempt {attempt + 1}/{retries})")
                     else:
-                        wait = 30 * (attempt + 1)   # fallback: 30s, 60s, 90s
+                        # TPM exhaustion needs a full window: start at 65s, not 30s
+                        wait = 65 * (attempt + 1)
                         print(f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) - waiting {wait}s...")
                     time.sleep(wait)
                     # Reset TPM window so next call re-checks cleanly
