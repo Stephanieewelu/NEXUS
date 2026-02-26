@@ -788,10 +788,13 @@ RULES:
 - Write COMPLETE code  -  no placeholders, no "// TODO"
 - TypeScript for frontend, Python for backend
 - All imports must reference files in the blueprint
-- API routes (src/app/api/**/route.ts) MUST use hardcoded mock data arrays  -  never import
-  database packages (pg, mysql2, mongodb, prisma, drizzle, sequelize, typeorm, sqlite3, etc.)
+- NEVER import database packages anywhere (pg, mysql2, mongodb, prisma, drizzle-orm,
+  sequelize, typeorm, sqlite3, better-sqlite3, etc.)  -  use hardcoded mock data arrays
+- NEVER import from '../lib/db', '../models/', '../services/db' or any database utility
+  in pages or components  -  define any needed data as a const array directly in the file
 - Components that use useState/useEffect MUST have "use client" as the very first line
-- Page files (page.tsx) must be Server Components by default  -  move interactivity to child components"""
+- Page files (page.tsx) must be Server Components by default  -  move interactivity to child components
+- Data for pages must come from hardcoded const arrays defined in the same file, NOT from DB imports"""
 
             result = self._track_llm_result(
                 self.llm.generate(
@@ -1088,6 +1091,52 @@ RULES:
                         print(f"   🔧 Auto-fix: created stub {stub_name}.tsx")
                     continue
 
+                # ── Rule 4: Missing lib/, models/, services/, utils/, hooks/ file → create stub ──
+                # Covers patterns like: '../lib/db', '../models/portfolio', '../services/api'
+                _util_dirs = {"lib", "models", "services", "hooks", "utils", "types", "helpers"}
+                imp_parts = imp.replace("\\", "/").split("/")
+                if any(p in _util_dirs for p in imp_parts):
+                    base_dir = os.path.dirname(fpath)
+                    resolved = os.path.normpath(os.path.join(base_dir, imp))
+                    # Only create if neither .ts nor .tsx exists
+                    if not os.path.exists(resolved + ".ts") and not os.path.exists(resolved + ".tsx"):
+                        stub_basename = imp_basename
+                        low = stub_basename.lower()
+                        # DB/query stubs: return empty results to satisfy types
+                        if any(kw in low for kw in ["db", "database", "prisma", "drizzle", "sql", "query", "pool"]):
+                            stub_content = (
+                                "// Auto-generated mock DB stub — no external DB needed for build\n"
+                                "export async function query(_sql: string, _params?: unknown[]) {\n"
+                                "  return [];\n"
+                                "}\n"
+                                "export const db = {\n"
+                                "  query: async (_sql: string, _params?: unknown[]) => ({ rows: [] as unknown[] }),\n"
+                                "};\n"
+                                "export default db;\n"
+                            )
+                        elif any(kw in low for kw in ["model", "schema", "entity"]):
+                            comp_name = "".join(w.capitalize() for w in re.split(r"[-_/]", stub_basename) if w)
+                            stub_content = (
+                                f"// Auto-generated model stub\n"
+                                f"export interface {comp_name} {{\n"
+                                f"  id: string;\n"
+                                f"  createdAt: Date;\n"
+                                f"}}\n"
+                                f"export const mock{comp_name}s: {comp_name}[] = [];\n"
+                                f"export default mock{comp_name}s;\n"
+                            )
+                        else:
+                            fn_name = "".join(w.capitalize() for w in re.split(r"[-_]", stub_basename) if w)
+                            stub_content = (
+                                f"// Auto-generated utility stub for {imp}\n"
+                                f"export function get{fn_name}() {{ return []; }}\n"
+                                f"export default get{fn_name};\n"
+                            )
+                        os.makedirs(os.path.dirname(resolved + ".ts"), exist_ok=True)
+                        self.fs.write_file(resolved + ".ts", stub_content)
+                        print(f"   🔧 Auto-fix: created lib/model stub for '{imp}'")
+                    continue
+
             if content != original:
                 self.fs.write_file(fpath, content)
                 modified += 1
@@ -1224,6 +1273,30 @@ RULES:
                                 if mock_fix and len(mock_fix) > 20:
                                     self.fs.write_file(fpath, mock_fix)
                                     print(f"   🔧 Pre-fix rewritten: {rel}")
+
+        # Named-error pre-check: pages/components importing from lib/db, models/, etc.
+        # These are non-installable relative modules that the build can't resolve.
+        # Run the same auto-fix logic we use at Phase 5.5 so the LLM loop isn't needed.
+        if not is_split and "Module not found" in errors:
+            _missing_relative = re.findall(r"Module not found: Can't resolve '(\.\.?/[^']+)'", errors)
+            if _missing_relative:
+                print(f"   🔧 Pre-fix: resolving missing relative modules via auto-stub")
+                broken_entries = []
+                # Build broken list format expected by _fix_broken_imports
+                skip_dirs = {"node_modules", ".git", ".next"}
+                for root_dir, dirs, files in os.walk(project_path):
+                    dirs[:] = [d for d in dirs if d not in skip_dirs]
+                    for fname in files:
+                        if not fname.endswith((".tsx", ".ts")):
+                            continue
+                        fpath = os.path.join(root_dir, fname)
+                        content = self.fs.read_file(fpath) or ""
+                        for imp in re.findall(r'from\s+["\'](\.[^"\']+)["\']', content):
+                            if imp in _missing_relative:
+                                rel_file = fpath.replace(project_path + os.sep, "").replace(project_path + "/", "")
+                                broken_entries.append(f"{rel_file}: missing '{imp}'")
+                if broken_entries:
+                    self._fix_broken_imports(project_path, broken_entries)
 
         # Named-error pre-check: missing root layout in Next.js App Router
         # The LLM habitually creates pages/_app.tsx instead of src/app/layout.tsx,
