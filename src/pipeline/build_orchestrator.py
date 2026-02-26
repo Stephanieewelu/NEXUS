@@ -328,6 +328,41 @@ explicitly mentioned Python, FastAPI, Flask, or Django.
         project_path = str(self.fs.workspace / app_name)
 
         print(f"\n🗂️  Phase 4: Scaffolding at {project_path}...")
+
+        # Clean stale source files from any previous build of the same app name.
+        # We keep node_modules (saves re-running npm install) but wipe everything else.
+        import shutil as _shutil
+        if os.path.isdir(project_path):
+            is_split_existing = tech["type"] == "fullstack-split"
+            # Directories to wipe for a clean slate
+            if is_split_existing:
+                stale_dirs = ["frontend/src", "frontend/public", "backend"]
+                stale_files = ["frontend/index.html", "frontend/vite.config.ts",
+                               "frontend/tailwind.config.js", "frontend/postcss.config.js"]
+            else:
+                stale_dirs = ["src", "public"]
+                stale_files = [
+                    "tailwind.config.ts", "tailwind.config.js",
+                    "postcss.config.mjs", "postcss.config.js",
+                    "next.config.mjs", "next.config.js",
+                    "vercel.json", "tsconfig.json",
+                ]
+            cleaned = 0
+            for d in stale_dirs:
+                full_d = os.path.join(project_path, d)
+                if os.path.isdir(full_d):
+                    _shutil.rmtree(full_d)
+                    cleaned += 1
+            for f in stale_files:
+                full_f = os.path.join(project_path, f)
+                if os.path.isfile(full_f):
+                    os.remove(full_f)
+                    cleaned += 1
+            if cleaned:
+                print(f"   🧹 Cleaned {cleaned} stale item(s) from previous build")
+            # Also reset generated_files to avoid stale path cache
+            self.generated_files.clear()
+
         self.fs.create_directory(project_path)
 
         is_split = tech["type"] == "fullstack-split"
