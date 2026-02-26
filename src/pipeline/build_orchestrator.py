@@ -132,15 +132,19 @@ class BuildOrchestrator:
             test_ok, test_errors = self._phase_test(project_path, tech)
             self._set_phase("testing", "passed" if test_ok else "failed")
 
+            build_ok = test_ok
             if not test_ok:
                 self._set_phase("debugging", "running")
-                self._phase_debug(project_path, tech, test_errors)
-                self._set_phase("debugging", "passed")
+                build_ok = self._phase_debug(project_path, tech, test_errors)
+                self._set_phase("debugging", "passed" if build_ok else "failed")
             else:
                 self._set_phase("debugging", "passed")
 
+            self.project["build_ok"] = build_ok  # propagate to summary
+
             self._set_phase("optimization", "running")
-            self._set_phase("optimization", "passed")  # lightweight pass
+            self._phase_optimize(project_path, tech)
+            self._set_phase("optimization", "passed")
 
             self._set_phase("documentation", "running")
             self._phase_docs(project_path, reqs, tech)
@@ -188,7 +192,14 @@ class BuildOrchestrator:
         result = self.llm.generate(system, f"Build this app:\n{description}")
         reqs = self.llm.extract_json(result)
 
-        # Sanitise app name
+        # Derive app_name from display_name first (avoids LLM slug typos like "websiite")
+        display = reqs.get("display_name", "")
+        if display:
+            derived = re.sub(r"[^a-z0-9]+", "-", display.lower()).strip("-")
+            if derived:
+                reqs["app_name"] = derived
+
+        # Final sanitise: strip any remaining bad chars
         name = re.sub(r"[^a-z0-9-]", "-", reqs.get("app_name", "nexus-app").lower()).strip("-")
         reqs["app_name"] = name or "nexus-app"
 
@@ -590,6 +601,32 @@ OTHER RULES:
                 corrected.append(f)
             file_list = corrected
 
+        # Fix #1: redirect src/app/components/ → src/components/ and deduplicate
+        # Fix #2: enforce single canonical CSS file (src/app/globals.css)
+        if not is_split:
+            _APP_ONLY = {"/page.tsx", "/layout.tsx", "/route.ts", "/globals.css", "/error.tsx",
+                         "/loading.tsx", "/not-found.tsx", "/template.tsx"}
+            cleaned = []
+            seen_paths: set = set()
+            for f in file_list:
+                p = f.get("path", "")
+                # Redirect component files placed inside src/app/components/
+                if p.startswith("src/app/components/"):
+                    p = "src/components/" + p[len("src/app/components/"):]
+                    f = {**f, "path": p}
+                    print(f"   🔧 Component redirected to src/components/: {f['path']}")
+                # Drop extra CSS files; keep only src/app/globals.css
+                if p.endswith(".css") and p != "src/app/globals.css":
+                    print(f"   ⏭️  CSS dedup: dropping {p} (canonical: src/app/globals.css)")
+                    continue
+                # Deduplicate by path
+                if p in seen_paths:
+                    print(f"   ⏭️  Dedup: skipping duplicate {p}")
+                    continue
+                seen_paths.add(p)
+                cleaned.append(f)
+            file_list = cleaned
+
         # Safety: for Next.js App Router, layout.tsx is mandatory  -  inject if missing
         if not is_split:
             has_layout = any(f.get("path") == "src/app/layout.tsx" for f in file_list)
@@ -700,6 +737,14 @@ RULES:
                 self.fs.write_file(layout_disk, layout_content)
                 self.generated_files["src/app/layout.tsx"] = layout_content
 
+        # Phase 5.5 — import path validation
+        if not is_split:
+            bad = self._validate_imports(project_path)
+            if bad:
+                print(f"\n   ⚠️  {len(bad)} broken import(s) detected before build:")
+                for b in bad[:10]:
+                    print(f"      {b}")
+
         self.git.commit(project_path, "Core implementation complete")
         print(f"\n   ✅ Implementation complete! ({len(self.generated_files)} files)")
 
@@ -769,6 +814,29 @@ RULES:
                     })
         return {"files": files}
 
+    def _validate_imports(self, project_path: str) -> list:
+        """Scan all .ts/.tsx files for relative imports that don't resolve to a real file."""
+        broken = []
+        skip_dirs = {"node_modules", ".git", ".next", "dist", "build"}
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            for fname in files:
+                if not fname.endswith((".tsx", ".ts")):
+                    continue
+                fpath = os.path.join(root, fname)
+                content = self.fs.read_file(fpath) or ""
+                for imp in re.findall(r'from\s+["\'](\.[^"\']+)["\']', content):
+                    base = os.path.dirname(fpath)
+                    resolved = os.path.normpath(os.path.join(base, imp))
+                    exists = any(
+                        os.path.exists(resolved + ext)
+                        for ext in ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]
+                    )
+                    if not exists:
+                        rel_file = fpath.replace(project_path + os.sep, "")
+                        broken.append(f"{rel_file}: missing '{imp}'")
+        return broken
+
     # ------------------------------------------------------------------
     # Phase 6  -  Styling
     # ------------------------------------------------------------------
@@ -777,7 +845,9 @@ RULES:
         print("\n🎨 Phase 6: Styling…")
 
         is_split = tech["type"] == "fullstack-split"
-        css_rel = "frontend/src/index.css" if is_split else "src/index.css"
+        # For Next.js App Router the canonical CSS file is src/app/globals.css.
+        # For Vite/split it lives at frontend/src/index.css.
+        css_rel = "frontend/src/index.css" if is_split else "src/app/globals.css"
 
         css = self.llm.generate(
             f"Generate a complete Tailwind CSS file for '{reqs.get('display_name', '')}'. "
@@ -792,6 +862,14 @@ RULES:
         full = os.path.join(project_path, css_rel)
         self.fs.write_file(full, css)
         self.generated_files[css_rel] = css
+
+        # Remove stray duplicate CSS files that the LLM may have written
+        if not is_split:
+            for stray in ["src/index.css", "src/styles/globals.css", "src/styles/index.css"]:
+                stray_full = os.path.join(project_path, stray)
+                if os.path.exists(stray_full):
+                    os.remove(stray_full)
+                    print(f"   🗑️  Removed stray CSS: {stray}")
 
         self.git.commit(project_path, "Styling and UI polish")
         print("   ✅ Styling complete!")
@@ -907,8 +985,16 @@ RULES:
                 self.generated_files["src/app/layout.tsx"] = layout_content
 
         current_errors = errors
+        seen_error_hashes: set = set()
+        prev_fixes: set = set()  # track which files we've already rewritten (Fix #8 cache)
+
         for attempt in range(max_attempts):
             print(f"\n   🔄 Fix attempt {attempt + 1}/{max_attempts}")
+
+            # Fix #3: detect identical errors across attempts  → switch to aggressive strategy
+            err_hash = hash(current_errors[:500])
+            stuck = err_hash in seen_error_hashes
+            seen_error_hashes.add(err_hash)
 
             # Read files that are mentioned in the error output
             error_files = self._files_from_errors(current_errors, project_path)
@@ -917,14 +1003,25 @@ RULES:
                 content = self.fs.read_file(fpath)
                 if content:
                     rel = fpath.replace(project_path + os.sep, "").replace(project_path + "/", "")
-                    file_contents[rel] = content
+                    # Fix #8: send more context when stuck, standard snippet otherwise
+                    file_contents[rel] = content if stuck else content[:800]
+
+            if stuck:
+                print("   ⚠️  Same error repeated  -  switching to aggressive rewrite strategy")
+                extra_rules = (
+                    "IMPORTANT: previous attempts produced the same error. "
+                    "You MUST take a completely different approach. "
+                    "Rewrite all affected files from scratch with minimal dependencies.\n"
+                )
+            else:
+                extra_rules = ""
 
             fix_system = f"""Fix these TypeScript/React build errors.
 ERRORS:
 {current_errors[:2000]}
 
-RELEVANT FILE CONTENTS:
-{json.dumps({k: v[:600] for k, v in file_contents.items()}, indent=2)[:4000]}
+RELEVANT FILE CONTENTS (full content when stuck):
+{json.dumps({k: v for k, v in file_contents.items()}, indent=2)[:5000]}
 
 Output ONLY valid JSON:
 {{
@@ -934,10 +1031,11 @@ Output ONLY valid JSON:
     ]
 }}
 RULES:
-- Provide COMPLETE file content  -  not just the changed lines
+{extra_rules}- Provide COMPLETE file content  -  not just the changed lines
 - Fix ALL errors in one pass
 - If an import refers to a missing file, create that file too
 - This is a Next.js 14 APP ROUTER project (src/app/ directory)
+- components live in src/components/ NOT src/app/components/
 - NEVER create files inside pages/  -  that is the Pages Router and does NOT apply here
 - If the error is "doesn't have a root layout", create src/app/layout.tsx (not pages/_app.tsx)
 - NEVER import database packages (pg, mysql2, mongodb, prisma, drizzle-orm, etc.) in API routes
@@ -947,21 +1045,32 @@ RULES:
             result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=6000)
             fix_data = self.llm.extract_json(result)
 
+            files_written = 0
             if fix_data and "fixes" in fix_data:
                 print(f"   💡 Diagnosis: {fix_data.get('diagnosis', '')[:100]}")
                 for fix in fix_data["fixes"]:
                     fpath = fix.get("path", "")
                     content = fix.get("content", "")
-                    if fpath and content:
-                        full = os.path.join(project_path, fpath)
-                        self.fs.write_file(full, content)
-                        self.generated_files[fpath] = content
-                        print(f"   🔧 Fixed: {fpath}")
+                    if not fpath or not content:
+                        continue
+                    # Fix #8: skip if content unchanged since last write
+                    cached = self.generated_files.get(fpath, "")
+                    if content.strip() == cached.strip() and fpath in prev_fixes:
+                        print(f"   ⏭️  Skip (unchanged): {fpath}")
+                        continue
+                    full = os.path.join(project_path, fpath)
+                    self.fs.write_file(full, content)
+                    self.generated_files[fpath] = content
+                    prev_fixes.add(fpath)
+                    files_written += 1
+                    print(f"   🔧 Fixed: {fpath}")
+
+            if files_written == 0 and not stuck:
+                print("   ℹ️  No new fixes this round  -  retrying with more context next attempt")
 
             self.git.commit(project_path, f"Bug fix attempt {attempt + 1}")
 
-            # Always run npm install if package.json was among the fixes,
-            # or if node_modules is missing  -  new deps won't take effect otherwise
+            # Run npm install if package.json was touched or node_modules is missing
             pkg_was_fixed = any(
                 f.get("path", "").endswith("package.json")
                 for f in (fix_data.get("fixes", []) if fix_data else [])
@@ -976,11 +1085,16 @@ RULES:
             stdout, stderr, code = self.terminal.run("npm run build 2>&1", cwd=build_dir, timeout=120)
             if code == 0:
                 print(f"   ✅ Fixed after {attempt + 1} attempt(s)!")
-                return
+                return True
 
             current_errors = stderr or stdout
 
         print(f"   ⚠️  Could not fix all issues after {max_attempts} attempts")
+        print("   Remaining errors:")
+        for line in current_errors.split("\n")[:10]:
+            if line.strip():
+                print(f"      {line.strip()}")
+        return False
 
     def _files_from_errors(self, errors: str, project_path: str) -> List[str]:
         found = set()
@@ -994,6 +1108,46 @@ RULES:
             all_files = self.fs.list_directory(project_path, recursive=True)
             found = {f for f in all_files if f.endswith((".tsx", ".ts", ".py"))}
         return list(found)[:10]
+
+    # ------------------------------------------------------------------
+    # Phase 9  -  Optimization
+    # ------------------------------------------------------------------
+
+    def _phase_optimize(self, project_path: str, tech: dict):
+        print("\n✨ Phase 9: Optimization…")
+        is_split = tech["type"] == "fullstack-split"
+        actions = 0
+
+        if not is_split:
+            import shutil
+
+            # 1. Remove duplicate src/app/components/ (Fix #1 cleanup)
+            app_comp = os.path.join(project_path, "src", "app", "components")
+            if os.path.isdir(app_comp):
+                shutil.rmtree(app_comp)
+                print("   🗑️  Removed src/app/components/ (duplicates of src/components/)")
+                actions += 1
+
+            # 2. Remove stray CSS files (Fix #2 cleanup)
+            for stray in ["src/index.css", "src/styles/globals.css", "src/styles/index.css"]:
+                stray_full = os.path.join(project_path, stray)
+                if os.path.exists(stray_full):
+                    os.remove(stray_full)
+                    print(f"   🗑️  Removed stray CSS: {stray}")
+                    actions += 1
+
+            # 3. Report broken imports (Fix #7 followup — report but don't block)
+            broken = self._validate_imports(project_path)
+            if broken:
+                print(f"   ⚠️  {len(broken)} unresolved import(s) (may cause build errors):")
+                for b in broken[:5]:
+                    print(f"      {b}")
+            else:
+                print("   ✅ All relative imports resolve correctly")
+
+        if actions:
+            self.git.commit(project_path, "Optimization pass")
+        print(f"   ✅ Optimization complete! ({actions} cleanup action(s))")
 
     # ------------------------------------------------------------------
     # Phase 10  -  Documentation
@@ -1090,14 +1244,27 @@ RULES:
             "cd frontend && npm install && npm run dev\n   # (backend) cd backend && uvicorn main:app --reload"
             if is_split else "npm install && npm run dev"
         )
+        # Fix #4: accurately reflect whether the build succeeded
+        build_ok = self.project.get("build_ok", True)
+        if build_ok:
+            header = "║              🎉 BUILD COMPLETE!                          ║"
+            footer_note = ""
+        else:
+            header = "║        ⚠️  BUILD INCOMPLETE  -  manual fixes needed       ║"
+            footer_note = (
+                "\n⚠️  The npm build did not pass after all debug attempts.\n"
+                "   Run  npm run build  inside the project folder to see\n"
+                "   remaining errors and fix them manually.\n"
+            )
         summary = (
             "\n╔══════════════════════════════════════════════════════════╗\n"
-            "║              🎉 BUILD COMPLETE!                          ║\n"
+            f"{header}\n"
             "╠══════════════════════════════════════════════════════════╣\n\n"
             f"📁 Location:  {project_path}\n"
             f"📊 Files:     {len(self.generated_files)}\n\n"
             f"Build phases:\n{phase_lines}\n\n"
-            f"📂 Structure:\n{tree}\n\n"
+            f"📂 Structure:\n{tree}\n"
+            f"{footer_note}\n"
             f"💡 Run it:\n   cd {project_path}\n   {run_cmd}\n\n"
             "╚══════════════════════════════════════════════════════════╝"
         )
