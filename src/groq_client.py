@@ -131,7 +131,7 @@ class GroqClient:
         system_prompt: str,
         user_message: str,
         max_tokens: int = 6000,
-        retries: int = 3,
+        retries: int = 2,
     ) -> str:
         """
         Generate text using Groq.
@@ -275,7 +275,7 @@ class GroqClient:
             except json.JSONDecodeError:
                 pass
 
-        # 4. Ask Groq to repair
+        # 4. Ask Groq to repair (1 retry only — don't burn rate limit on repair)
         if len(text) > 50:
             print("  ⚠️  Repairing malformed JSON…")
             try:
@@ -284,6 +284,7 @@ class GroqClient:
                     "No markdown, no code blocks, no explanation. Fix the JSON below.",
                     text[:4000],
                     max_tokens=4096,
+                    retries=1,
                 )
                 fixed = fixed.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
                 return json.loads(fixed)

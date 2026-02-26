@@ -878,7 +878,15 @@ RULES:
                 self.fs.write_file(globals_disk, default_css)
                 self.generated_files["src/app/globals.css"] = default_css
 
-        # Phase 5.5 — import path validation + auto-fix (no LLM calls)
+        # Phase 5.5a — 'use client' enforcement (no LLM calls)
+        # Any file using React hooks MUST be a Client Component.
+        # This is the #1 recurring Next.js App Router build error.
+        if not is_split:
+            n_client = self._fix_client_directives(project_path)
+            if n_client:
+                print(f"   ✅ Added 'use client' to {n_client} hook-using file(s)")
+
+        # Phase 5.5b — import path validation + auto-fix (no LLM calls)
         if not is_split:
             bad = self._validate_imports(project_path)
             if bad:
@@ -1143,6 +1151,42 @@ RULES:
 
         return modified
 
+    def _fix_client_directives(self, project_path: str) -> int:
+        """
+        Add 'use client' to any .tsx/.ts file that uses React hooks but is missing the directive.
+        This is the most common Next.js App Router build error: hooks in Server Components.
+        API route files (route.ts) are skipped — they don't need 'use client'.
+        Returns the number of files fixed.
+        """
+        _HOOKS = re.compile(
+            r'\b(useState|useEffect|useContext|useReducer|useRef|useCallback|useMemo'
+            r'|useLayoutEffect|useImperativeHandle|useTransition|useDeferredValue)\s*\('
+        )
+        skip_dirs = {"node_modules", ".git", ".next", "dist", "build"}
+        fixed = 0
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            for fname in files:
+                if not fname.endswith((".tsx", ".ts")):
+                    continue
+                fpath = os.path.join(root, fname)
+                content = self.fs.read_file(fpath) or ""
+                rel = fpath.replace(project_path + os.sep, "").replace("\\", "/")
+                # Skip API route handlers — they run server-side, no 'use client' needed
+                if fname == "route.ts" and "/api/" in rel:
+                    continue
+                # Already has the directive?
+                if '"use client"' in content or "'use client'" in content:
+                    continue
+                # Uses hooks?
+                if _HOOKS.search(content):
+                    content = '"use client";\n' + content
+                    self.fs.write_file(fpath, content)
+                    self.generated_files[rel] = content
+                    print(f"   🔧 'use client': added to {rel}")
+                    fixed += 1
+        return fixed
+
     # ------------------------------------------------------------------
     # Phase 6  -  Styling
     # ------------------------------------------------------------------
@@ -1298,6 +1342,13 @@ RULES:
                 if broken_entries:
                     self._fix_broken_imports(project_path, broken_entries)
 
+        # Named-error pre-check: hooks in Server Components → add 'use client'
+        # "You're importing a component that needs useState" is a top-3 build error.
+        if not is_split and ("useState" in errors or "useEffect" in errors or "use client" in errors):
+            n_client = self._fix_client_directives(project_path)
+            if n_client:
+                print(f"   🔧 Pre-fix: added 'use client' to {n_client} file(s)")
+
         # Named-error pre-check: missing root layout in Next.js App Router
         # The LLM habitually creates pages/_app.tsx instead of src/app/layout.tsx,
         # so we detect and fix this before any LLM round-trip.
@@ -1411,6 +1462,22 @@ RULES:
                     content = fix.get("content", "")
                     if not fpath or not content or len(content.strip()) < 10:
                         continue
+                    # Correct wrong paths: LLM sometimes writes src/app/lib/ or src/app/models/
+                    # which are not valid Next.js App Router paths.
+                    _wrong_prefixes = [
+                        ("src/app/lib/",     "src/lib/"),
+                        ("src/app/models/",  "src/models/"),
+                        ("src/app/services/","src/services/"),
+                        ("src/app/utils/",   "src/utils/"),
+                        ("src/app/types/",   "src/types/"),
+                        ("src/app/hooks/",   "src/hooks/"),
+                    ]
+                    for wrong, right in _wrong_prefixes:
+                        if fpath.startswith(wrong):
+                            corrected = right + fpath[len(wrong):]
+                            print(f"   🔧 Path fix: {fpath} → {corrected}")
+                            fpath = corrected
+                            break
                     # Protect layout.tsx: never overwrite with invalid content
                     if fpath == "src/app/layout.tsx" and "export default" not in content:
                         print(f"   ⏭️  Skip: {fpath} fix lacks 'export default' — keeping existing")
