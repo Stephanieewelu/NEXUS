@@ -94,6 +94,10 @@ class BuildOrchestrator:
         ]
         self.generated_files: Dict[str, str] = {}  # path → content, prevents duplicates
 
+        # LLM health tracking — abort early when the API is consistently failing
+        self._llm_calls = 0
+        self._llm_failures = 0
+
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
@@ -107,6 +111,15 @@ class BuildOrchestrator:
             self._set_phase("requirements", "running")
             reqs = self._phase_requirements(user_description)
             self._set_phase("requirements", "passed")
+
+            # Early abort: if LLM returned no features AND no pages, the API is dead
+            n_features = len(reqs.get("core_features", []))
+            n_pages = len(reqs.get("pages", []))
+            if n_features == 0 and n_pages == 0:
+                raise RuntimeError(
+                    "Phase 1 produced 0 features and 0 pages - the LLM API is likely "
+                    "rate-limited or unavailable. Wait a few minutes and try again."
+                )
 
             self._set_phase("architecture", "running")
             arch = self._phase_architecture(reqs)
@@ -163,6 +176,26 @@ class BuildOrchestrator:
             return f"Build failed: {exc}"
 
     # ------------------------------------------------------------------
+    # LLM health helpers
+    # ------------------------------------------------------------------
+
+    def _track_llm_result(self, result: str) -> str:
+        """Track whether an LLM call succeeded or returned empty."""
+        self._llm_calls += 1
+        if not result or not result.strip():
+            self._llm_failures += 1
+        return result
+
+    def _check_llm_health(self, context: str = ""):
+        """Raise RuntimeError if the LLM is consistently failing (>80% empty after 4+ calls)."""
+        if self._llm_calls >= 4 and self._llm_failures / self._llm_calls > 0.8:
+            raise RuntimeError(
+                f"LLM is consistently failing ({self._llm_failures}/{self._llm_calls} calls returned empty). "
+                f"The API is likely rate-limited or unavailable. "
+                f"Context: {context}. Wait a few minutes and try again."
+            )
+
+    # ------------------------------------------------------------------
     # Phase 1  -  Requirements
     # ------------------------------------------------------------------
 
@@ -189,7 +222,9 @@ class BuildOrchestrator:
     ]
 }"""
 
-        result = self.llm.generate(system, f"Build this app:\n{description}")
+        result = self._track_llm_result(
+            self.llm.generate(system, f"Build this app:\n{description}")
+        )
         reqs = self.llm.extract_json(result)
 
         # Derive app_name from display_name first (avoids LLM slug typos like "websiite")
@@ -234,7 +269,9 @@ explicitly mentioned Python, FastAPI, Flask, or Django.
 {"Python/FastAPI was detected  -  fullstack-split is allowed." if python_requested else
  "No Python backend was requested  -  you MUST use structure=single."}"""
 
-        result = self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
+        result = self._track_llm_result(
+            self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
+        )
         arch = self.llm.extract_json(result)
 
         # Safety: enforce "single" if Python was not requested
@@ -520,6 +557,39 @@ export default {
         for sub in ["src", "src/app", "src/components", "src/lib", "public"]:
             self.fs.create_directory(os.path.join(project_path, sub))
 
+        # Tailwind config
+        self.fs.write_file(
+            os.path.join(project_path, "tailwind.config.ts"),
+            'import type { Config } from "tailwindcss";\n\n'
+            "const config: Config = {\n"
+            '  content: [\n    "./src/**/*.{js,ts,jsx,tsx,mdx}",\n  ],\n'
+            "  theme: { extend: {} },\n"
+            "  plugins: [],\n"
+            "};\n"
+            "export default config;\n",
+        )
+
+        # PostCSS config
+        self.fs.write_file(
+            os.path.join(project_path, "postcss.config.mjs"),
+            "/** @type {import('postcss-load-config').Config} */\n"
+            "const config = {\n"
+            "  plugins: {\n"
+            "    tailwindcss: {},\n"
+            "    autoprefixer: {},\n"
+            "  },\n"
+            "};\n"
+            "export default config;\n",
+        )
+
+        # next.config.js (minimal)
+        self.fs.write_file(
+            os.path.join(project_path, "next.config.mjs"),
+            "/** @type {import('next').NextConfig} */\n"
+            "const nextConfig = {};\n"
+            "export default nextConfig;\n",
+        )
+
         print("   📦 Installing dependencies…")
         _, stderr, code = self.terminal.run("npm install", cwd=project_path, timeout=180)
         print(f"   {'✅' if code == 0 else '⚠️ '} npm install {'OK' if code == 0 else stderr[:100]}")
@@ -578,7 +648,9 @@ OTHER RULES:
 - ONE file per purpose  -  NO duplicates
 - Consistent import paths throughout"""
 
-        bp_result = self.llm.generate(bp_system, "Generate the complete file list.")
+        bp_result = self._track_llm_result(
+            self.llm.generate(bp_system, "Generate the complete file list.")
+        )
         blueprint = self.llm.extract_json(bp_result)
 
         if not blueprint or "files" not in blueprint:
@@ -657,6 +729,9 @@ OTHER RULES:
 
         batch_size = 3   # smaller batches = fewer tokens per call = less TPM pressure
         for i in range(0, len(file_list), batch_size):
+            # Health gate: abort if LLM is consistently failing
+            self._check_llm_health(f"Phase 5 batch {i // batch_size + 1}")
+
             batch = file_list[i : i + batch_size]
             labels = [f["path"] for f in batch]
             print(f"\n   📦 Batch {i // batch_size + 1}: {', '.join(labels[:3])}{'…' if len(labels) > 3 else ''}")
@@ -683,10 +758,12 @@ RULES:
 - Components that use useState/useEffect MUST have "use client" as the very first line
 - Page files (page.tsx) must be Server Components by default  -  move interactivity to child components"""
 
-            result = self.llm.generate(
-                gen_system,
-                f"Tech: {json.dumps(tech, indent=2)[:400]}",
-                max_tokens=6000,   # 6000 per batch of 3 = ~2000 tokens/file, fits in TPM window
+            result = self._track_llm_result(
+                self.llm.generate(
+                    gen_system,
+                    f"Tech: {json.dumps(tech, indent=2)[:400]}",
+                    max_tokens=6000,
+                )
             )
             data = self.llm.extract_json(result)
 
@@ -708,34 +785,60 @@ RULES:
                 for f in batch:
                     self._generate_single_file(f, project_path, reqs, tech)
 
-        # Post-batch disk guarantee: src/app/layout.tsx MUST exist for Next.js App Router
+        # Post-batch disk guarantee: src/app/layout.tsx MUST exist AND be valid
         if not is_split:
             layout_disk = os.path.join(project_path, "src", "app", "layout.tsx")
+            app_title = reqs.get("display_name", "App")
+            app_desc = reqs.get("summary", "Built with NEXUS")
+            _hardcoded_layout = (
+                'import type { Metadata } from "next";\n'
+                'import "./globals.css";\n\n'
+                'export const metadata: Metadata = {\n'
+                f'  title: "{app_title}",\n'
+                f'  description: "{app_desc}",\n'
+                "};\n\n"
+                "export default function RootLayout({\n"
+                "  children,\n"
+                "}: Readonly<{\n"
+                "  children: React.ReactNode;\n"
+                "}>) {\n"
+                "  return (\n"
+                '    <html lang="en">\n'
+                "      <body>{children}</body>\n"
+                "    </html>\n"
+                "  );\n"
+                "}\n"
+            )
+
+            need_write = False
             if not os.path.exists(layout_disk):
-                print("   🔧 Post-batch safety: writing src/app/layout.tsx (was missing from batches)")
-                app_title = reqs.get("display_name", "App")
-                app_desc = reqs.get("summary", "Built with NEXUS")
-                layout_content = (
-                    'import type { Metadata } from "next";\n'
-                    'import "./globals.css";\n\n'
-                    'export const metadata: Metadata = {\n'
-                    f'  title: "{app_title}",\n'
-                    f'  description: "{app_desc}",\n'
-                    "};\n\n"
-                    "export default function RootLayout({\n"
-                    "  children,\n"
-                    "}: Readonly<{\n"
-                    "  children: React.ReactNode;\n"
-                    "}>) {\n"
-                    "  return (\n"
-                    '    <html lang="en">\n'
-                    "      <body>{children}</body>\n"
-                    "    </html>\n"
-                    "  );\n"
-                    "}\n"
+                print("   🔧 Post-batch safety: writing src/app/layout.tsx (was missing)")
+                need_write = True
+            else:
+                # Validate content: must contain 'export default' to be a valid module
+                existing = self.fs.read_file(layout_disk) or ""
+                if "export default" not in existing:
+                    print("   🔧 Post-batch safety: layout.tsx is invalid (no export default) — rewriting")
+                    need_write = True
+                elif len(existing.strip()) < 50:
+                    print("   🔧 Post-batch safety: layout.tsx is too short/empty — rewriting")
+                    need_write = True
+
+            if need_write:
+                self.fs.write_file(layout_disk, _hardcoded_layout)
+                self.generated_files["src/app/layout.tsx"] = _hardcoded_layout
+
+            # Also ensure globals.css exists (layout.tsx imports it)
+            globals_disk = os.path.join(project_path, "src", "app", "globals.css")
+            if not os.path.exists(globals_disk):
+                print("   🔧 Post-batch safety: writing src/app/globals.css (was missing)")
+                default_css = (
+                    "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n"
+                    ":root {\n  --foreground: #171717;\n  --background: #ffffff;\n}\n\n"
+                    "body {\n  color: var(--foreground);\n  background: var(--background);\n}\n"
                 )
-                self.fs.write_file(layout_disk, layout_content)
-                self.generated_files["src/app/layout.tsx"] = layout_content
+                self.fs.write_file(globals_disk, default_css)
+                self.generated_files["src/app/globals.css"] = default_css
 
         # Phase 5.5 — import path validation + auto-fix (no LLM calls)
         if not is_split:
@@ -758,16 +861,25 @@ RULES:
         fpath = file_info.get("path", "")
         if not fpath or fpath in self.generated_files:
             return
-        code = self.llm.generate(
-            f"Write COMPLETE working code for: {fpath}\nPurpose: {file_info.get('purpose', '')}\n"
-            f"App: {reqs.get('summary', '')}\nOutput ONLY raw code, no markdown fences.",
-            f"Tech: {json.dumps(tech, indent=2)[:300]}",
-            max_tokens=4096,
+        code = self._track_llm_result(
+            self.llm.generate(
+                f"Write COMPLETE working code for: {fpath}\nPurpose: {file_info.get('purpose', '')}\n"
+                f"App: {reqs.get('summary', '')}\nOutput ONLY raw code, no markdown fences.",
+                f"Tech: {json.dumps(tech, indent=2)[:300]}",
+                max_tokens=4096,
+            )
         )
         code = code.strip()
+        # CRITICAL: never write empty files — this overwrites valid scaffold files
+        if not code:
+            print(f"   ⚠️  LLM returned empty for {fpath} — skipping (will not overwrite)")
+            return
         if code.startswith("```"):
             lines = code.split("\n")
             code = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        if not code.strip():
+            print(f"   ⚠️  LLM returned only fences for {fpath} — skipping")
+            return
         full = os.path.join(project_path, fpath)
         if self.fs.write_file(full, code):
             self.generated_files[fpath] = code
@@ -959,14 +1071,25 @@ RULES:
         # For Vite/split it lives at frontend/src/index.css.
         css_rel = "frontend/src/index.css" if is_split else "src/app/globals.css"
 
-        css = self.llm.generate(
-            f"Generate a complete Tailwind CSS file for '{reqs.get('display_name', '')}'. "
-            "Output ONLY raw CSS  -  no markdown, no explanation. "
-            "Include @tailwind directives, CSS variables, dark mode, animations.",
-            "Generate the CSS.",
+        css = self._track_llm_result(
+            self.llm.generate(
+                f"Generate a complete Tailwind CSS file for '{reqs.get('display_name', '')}'. "
+                "Output ONLY raw CSS  -  no markdown, no explanation. "
+                "Include @tailwind directives, CSS variables, dark mode, animations.",
+                "Generate the CSS.",
+            )
         )
         css = css.strip().lstrip("```css").lstrip("```").rstrip("```").strip()
-        if not css.startswith("@tailwind"):
+
+        # Fallback: if LLM returned empty, use minimal valid Tailwind CSS
+        if not css:
+            print("   ⚠️  LLM returned empty CSS — using Tailwind defaults")
+            css = (
+                "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n"
+                ":root {\n  --foreground: #171717;\n  --background: #ffffff;\n}\n\n"
+                "body {\n  color: var(--foreground);\n  background: var(--background);\n}\n"
+            )
+        elif not css.startswith("@tailwind"):
             css = "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n" + css
 
         full = os.path.join(project_path, css_rel)
@@ -1053,15 +1176,17 @@ RULES:
                             if any(pkg in content for pkg in _missing_db):
                                 # Ask LLM to rewrite just this one file with mock data
                                 rel = fpath.replace(project_path + os.sep, "").replace(project_path + "/", "")
-                                mock_fix = self.llm.generate(
-                                    f"Rewrite this Next.js API route to use hardcoded mock data "
-                                    f"instead of any database package. Output ONLY the raw TypeScript "
-                                    f"file content, no markdown fences.\n\nCURRENT FILE ({rel}):\n{content[:3000]}",
-                                    "Rewrite with mock data.",
-                                    max_tokens=4096,
+                                mock_fix = self._track_llm_result(
+                                    self.llm.generate(
+                                        f"Rewrite this Next.js API route to use hardcoded mock data "
+                                        f"instead of any database package. Output ONLY the raw TypeScript "
+                                        f"file content, no markdown fences.\n\nCURRENT FILE ({rel}):\n{content[:3000]}",
+                                        "Rewrite with mock data.",
+                                        max_tokens=4096,
+                                    )
                                 )
                                 mock_fix = mock_fix.strip().lstrip("```typescript").lstrip("```ts").lstrip("```").rstrip("```").strip()
-                                if mock_fix:
+                                if mock_fix and len(mock_fix) > 20:
                                     self.fs.write_file(fpath, mock_fix)
                                     print(f"   🔧 Pre-fix rewritten: {rel}")
 
@@ -1099,6 +1224,14 @@ RULES:
         prev_fixes: set = set()  # track which files we've already rewritten (Fix #8 cache)
 
         for attempt in range(max_attempts):
+            # Health gate: don't burn rate limit on LLM calls if API is dead
+            try:
+                self._check_llm_health(f"Phase 8 attempt {attempt + 1}")
+            except RuntimeError as e:
+                print(f"   ⚠️  {e}")
+                print("   ⏹️  Skipping remaining debug attempts to conserve API budget")
+                break
+
             print(f"\n   🔄 Fix attempt {attempt + 1}/{max_attempts}")
 
             # Fix #3: detect identical errors across attempts  → switch to aggressive strategy
@@ -1152,8 +1285,15 @@ RULES:
    -  use hardcoded mock data arrays instead
 - Components using useState/useEffect MUST start with "use client" as the very first line"""
 
-            result = self.llm.generate(fix_system, "Fix the errors.", max_tokens=6000)
+            result = self._track_llm_result(
+                self.llm.generate(fix_system, "Fix the errors.", max_tokens=6000)
+            )
             fix_data = self.llm.extract_json(result)
+
+            # If LLM returned empty, skip writing to avoid overwriting good files
+            if not result or not result.strip():
+                print("   ⚠️  LLM returned empty — skipping this attempt")
+                continue
 
             files_written = 0
             if fix_data and "fixes" in fix_data:
@@ -1161,7 +1301,11 @@ RULES:
                 for fix in fix_data["fixes"]:
                     fpath = fix.get("path", "")
                     content = fix.get("content", "")
-                    if not fpath or not content:
+                    if not fpath or not content or len(content.strip()) < 10:
+                        continue
+                    # Protect layout.tsx: never overwrite with invalid content
+                    if fpath == "src/app/layout.tsx" and "export default" not in content:
+                        print(f"   ⏭️  Skip: {fpath} fix lacks 'export default' — keeping existing")
                         continue
                     # Fix #8: skip if content unchanged since last write
                     cached = self.generated_files.get(fpath, "")
