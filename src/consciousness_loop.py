@@ -18,8 +18,9 @@ Commands understood in the REPL:
 
 LLM provider selection (checked in order):
     1. LLM_PROVIDER env var  ("groq" | "gemini" | "auto")
-    2. GROQ_API_KEY present  → Groq  (30 RPM, 14,400 RPD — recommended)
-    3. GEMINI_API_KEY present → Gemini (15 RPM, 1,500 RPD — fallback)
+    2. Both keys set → FallbackLLMClient (Groq primary, Gemini secondary)
+    3. Only GROQ_API_KEY   → GroqClient
+    4. Only GEMINI_API_KEY → GeminiClient
 """
 
 import os
@@ -37,9 +38,10 @@ def _init_llm(
     """
     Initialise the best available LLM client.
 
-    Priority:
-      1. Explicit provider argument or LLM_PROVIDER env var
-      2. Auto-detect: Groq if GROQ_API_KEY is set, else Gemini
+    When both GROQ_API_KEY and GEMINI_API_KEY are set, returns a
+    FallbackLLMClient that uses Groq as primary and Gemini as secondary.
+    If Groq returns empty (rate-limited), the call is automatically
+    retried with Gemini — no build interruption, no waiting.
     """
     provider = provider or os.environ.get("LLM_PROVIDER", "auto")
 
@@ -60,13 +62,26 @@ def _init_llm(
     if provider == "gemini":
         return _try_gemini()
 
-    # auto — try Groq first, fall back to Gemini
+    # auto — prefer a dual-provider fallback when both keys exist
     groq_key = api_key or os.environ.get("GROQ_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+
+    if groq_key and gemini_key:
+        try:
+            from fallback_client import FallbackLLMClient  # type: ignore
+            groq_client = _try_groq()
+            gemini_client = _try_gemini()
+            client = FallbackLLMClient(primary=groq_client, secondary=gemini_client)
+            print("  🔀 Dual-LLM mode: Groq (primary) + Gemini (fallback)")
+            return client
+        except Exception as exc:
+            print(f"  ⚠️  Fallback setup failed ({exc}), using single provider…")
+
     if groq_key:
         try:
             return _try_groq()
         except Exception as exc:
-            print(f"  ⚠️  Groq unavailable ({exc}), falling back to Gemini…")
+            print(f"  ⚠️  Groq unavailable ({exc}), trying Gemini…")
 
     return _try_gemini()
 
