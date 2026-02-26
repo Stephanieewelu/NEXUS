@@ -737,13 +737,19 @@ RULES:
                 self.fs.write_file(layout_disk, layout_content)
                 self.generated_files["src/app/layout.tsx"] = layout_content
 
-        # Phase 5.5 — import path validation
+        # Phase 5.5 — import path validation + auto-fix (no LLM calls)
         if not is_split:
             bad = self._validate_imports(project_path)
             if bad:
-                print(f"\n   ⚠️  {len(bad)} broken import(s) detected before build:")
-                for b in bad[:10]:
-                    print(f"      {b}")
+                print(f"\n   ⚠️  {len(bad)} broken import(s) detected — attempting auto-fix...")
+                n_fixed = self._fix_broken_imports(project_path, bad)
+                remaining = self._validate_imports(project_path)
+                if remaining:
+                    print(f"   ⚠️  {len(remaining)} import(s) still broken after auto-fix:")
+                    for b in remaining[:10]:
+                        print(f"      {b}")
+                else:
+                    print(f"   ✅ All broken imports fixed ({n_fixed} file(s) updated)")
 
         self.git.commit(project_path, "Core implementation complete")
         print(f"\n   ✅ Implementation complete! ({len(self.generated_files)} files)")
@@ -836,6 +842,110 @@ RULES:
                         rel_file = fpath.replace(project_path + os.sep, "")
                         broken.append(f"{rel_file}: missing '{imp}'")
         return broken
+
+    def _fix_broken_imports(self, project_path: str, broken: list) -> int:
+        """
+        Auto-fix common broken import patterns without any LLM calls.
+
+        Handles:
+        - '../../layout' or '../layout' in page files (wrong in App Router — remove)
+        - Missing components that have a close-named file in src/components/
+        - Missing ./header, ./footer, ./nav stubs (create minimal component)
+
+        Returns the number of source files modified.
+        """
+        # Parse broken list → {rel_path: [missing_import, ...]}
+        by_file: dict = {}
+        for entry in broken:
+            m = re.match(r"(.+): missing '([^']+)'", entry.replace("\\", "/"))
+            if m:
+                rel, imp = m.group(1).strip(), m.group(2).strip()
+                by_file.setdefault(rel, []).append(imp)
+
+        comp_dir = os.path.join(project_path, "src", "components")
+        # Build a lookup: slug → actual filename (without .tsx)
+        comp_slugs: dict = {}
+        if os.path.isdir(comp_dir):
+            for f in os.listdir(comp_dir):
+                if f.endswith(".tsx"):
+                    slug = f[:-4].lower().replace("-", "").replace("_", "")
+                    comp_slugs[slug] = f[:-4]
+
+        modified = 0
+        for rel_path, missing_imports in by_file.items():
+            fpath = os.path.join(project_path, rel_path.replace("/", os.sep))
+            content = self.fs.read_file(fpath)
+            if not content:
+                continue
+            original = content
+
+            for imp in missing_imports:
+                imp_basename = imp.split("/")[-1]  # e.g. "image-generation-form"
+
+                # ── Rule 1: Remove App Router layout re-imports ──
+                # Pages NEVER import layout manually; Next.js applies it automatically
+                if re.search(r"[/\\]layout$", imp) or imp in ("../layout", "../../layout"):
+                    content = re.sub(
+                        r'import\s+\S+\s+from\s+["\']' + re.escape(imp) + r'["\'];\s*\n?',
+                        "", content,
+                    )
+                    # Unwrap <Layout>...</Layout> if present
+                    content = re.sub(r"<Layout[^>]*>([\s\S]*?)</Layout>", r"\1", content)
+                    print(f"   🔧 Auto-fix: removed layout re-import in {rel_path}")
+                    continue
+
+                # ── Rule 2: Remap missing component to nearest match ──
+                if "component" in imp or "/components/" in imp or imp.startswith("../../"):
+                    slug = imp_basename.lower().replace("-", "").replace("_", "")
+                    match_name = comp_slugs.get(slug)
+                    if not match_name:
+                        # Partial match: find a component whose slug starts the same way
+                        for cs, cn in comp_slugs.items():
+                            if slug[:6] in cs or cs[:6] in slug:
+                                match_name = cn
+                                break
+                    if match_name:
+                        # Compute correct relative path from the source file
+                        rel_comp = os.path.relpath(
+                            os.path.join(comp_dir, match_name),
+                            os.path.dirname(fpath),
+                        ).replace("\\", "/")
+                        if not rel_comp.startswith("."):
+                            rel_comp = "./" + rel_comp
+                        content = content.replace(f'"{imp}"', f'"{rel_comp}"')
+                        content = content.replace(f"'{imp}'", f"'{rel_comp}'")
+                        print(f"   🔧 Auto-fix: {imp} → {rel_comp} in {rel_path}")
+                        continue
+                    # No match — create minimal stub
+                    comp_name = "".join(w.capitalize() for w in re.split(r"[-_]", imp_basename))
+                    stub = f'"use client";\nexport default function {comp_name}() {{ return <div className="{imp_basename}"></div>; }}\n'
+                    stub_path = os.path.join(comp_dir, imp_basename + ".tsx")
+                    self.fs.write_file(stub_path, stub)
+                    # Update import to new correct path
+                    rel_comp = os.path.relpath(stub_path, os.path.dirname(fpath)).replace("\\", "/")
+                    if not rel_comp.startswith("."):
+                        rel_comp = "./" + rel_comp
+                    content = content.replace(f'"{imp}"', f'"{rel_comp}"')
+                    content = content.replace(f"'{imp}'", f"'{rel_comp}'")
+                    print(f"   🔧 Auto-fix: created stub {imp_basename}.tsx")
+                    continue
+
+                # ── Rule 3: Missing ./header, ./footer etc. in layout.tsx → create stub ──
+                if imp.startswith("./") and "/" not in imp[2:]:
+                    stub_name = imp[2:]  # e.g. "header"
+                    stub_path = os.path.join(os.path.dirname(fpath), stub_name + ".tsx")
+                    if not os.path.exists(stub_path):
+                        comp_name = stub_name.capitalize()
+                        stub = f'export default function {comp_name}() {{ return <div className="{stub_name}"></div>; }}\n'
+                        self.fs.write_file(stub_path, stub)
+                        print(f"   🔧 Auto-fix: created stub {stub_name}.tsx")
+                    continue
+
+            if content != original:
+                self.fs.write_file(fpath, content)
+                modified += 1
+
+        return modified
 
     # ------------------------------------------------------------------
     # Phase 6  -  Styling
