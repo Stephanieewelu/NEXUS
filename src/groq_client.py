@@ -66,8 +66,19 @@ class GroqClient:
     # Smart rate limiting (TPM-aware)
     # ------------------------------------------------------------------
 
-    def _smart_rate_limit(self, estimated_tokens: int = 3000):
-        """Proactively pace requests to stay under both RPM and TPM limits."""
+    def _smart_rate_limit(self, estimated_tokens: int = 3000, fail_fast: bool = False) -> bool:
+        """Proactively pace requests to stay under both RPM and TPM limits.
+
+        Args:
+            estimated_tokens: Rough token estimate for TPM accounting.
+            fail_fast: When True, return False immediately instead of sleeping
+                       if we're over budget (lets FallbackLLMClient switch to
+                       secondary without any delay).
+
+        Returns:
+            True  — OK to proceed with the API call.
+            False — Over budget; caller should abort and use fallback.
+        """
         now = time.time()
 
         # Daily reset
@@ -77,6 +88,9 @@ class GroqClient:
 
         # Daily cap
         if self._daily_count >= self._daily_limit:
+            if fail_fast:
+                print("  ⚡ Daily limit reached — switching to fallback immediately")
+                return False
             print("  🛑 Daily limit approaching - waiting 5 min...")
             time.sleep(300)
             self._daily_count = 0
@@ -94,17 +108,23 @@ class GroqClient:
         # Groq uses a sliding window, so always wait a full 65s when near the limit.
         budget = int(self._tpm_limit * self._tpm_buffer)
         if self._tokens_this_minute + estimated_tokens > budget:
+            if fail_fast:
+                print(f"  ⚡ TPM budget ({self._tokens_this_minute}/{budget} tok) — switching to fallback immediately")
+                return False
             wait = 65   # fixed full-window reset; sliding window means partial waits don't help
             print(f"  ⏳ TPM budget ({self._tokens_this_minute}/{budget} tokens): waiting {wait}s...")
             time.sleep(wait)
             self._tokens_this_minute = 0
             self._token_window_start = time.time()
 
-        # Minimum gap between requests
+        # Minimum gap between requests (skip in fail_fast — if we'd have to wait, use fallback)
         if self._request_timestamps:
             elapsed = time.time() - self._request_timestamps[-1]
             if elapsed < self._min_delay:
                 wait = self._min_delay - elapsed
+                if fail_fast and wait > 1:
+                    print(f"  ⚡ Pacing delay {wait:.0f}s — switching to fallback immediately")
+                    return False
                 if wait > 1:
                     print(f"  ⏳ Pacing: {wait:.0f}s...")
                 time.sleep(wait)
@@ -116,11 +136,15 @@ class GroqClient:
             oldest = min(recent)
             wait = 61 - (time.time() - oldest)
             if wait > 0:
+                if fail_fast:
+                    print(f"  ⚡ RPM limit ({len(recent)}/{self._rpm_limit}) — switching to fallback immediately")
+                    return False
                 print(f"  ⏳ RPM limit ({len(recent)}/{self._rpm_limit}): waiting {wait:.0f}s...")
                 time.sleep(wait)
 
         self._request_timestamps.append(time.time())
         self._daily_count += 1
+        return True
 
     # ------------------------------------------------------------------
     # Core generate
@@ -132,6 +156,7 @@ class GroqClient:
         user_message: str,
         max_tokens: int = 6000,
         retries: int = 2,
+        fail_fast: bool = False,
     ) -> str:
         """
         Generate text using Groq.
@@ -141,13 +166,17 @@ class GroqClient:
             user_message:  User turn content.
             max_tokens:    Max output tokens (default 6000, capped at 8192).
             retries:       Max attempts on transient errors.
+            fail_fast:     When True, return "" immediately on rate-limits instead
+                           of sleeping — used by FallbackLLMClient so Gemini can
+                           take over without any delay.
 
         Returns:
             Model response as a plain string (empty on failure).
         """
         # Estimate total tokens for TPM pacing (rough: 1 token ~= 4 chars)
         estimated = (len(system_prompt) + len(user_message)) // 4 + max_tokens
-        self._smart_rate_limit(estimated_tokens=estimated)
+        if not self._smart_rate_limit(estimated_tokens=estimated, fail_fast=fail_fast):
+            return ""   # Over budget; caller's fallback handles it
 
         # Truncate input if needed
         max_input_chars = 100_000
@@ -156,7 +185,10 @@ class GroqClient:
             user_message = user_message[:max(available, 500)]
             print(f"  ✂️  Truncated input to ~{max_input_chars // 4} tokens")
 
-        for attempt in range(retries):
+        # fail_fast → only 1 attempt (no retry loops that add latency)
+        effective_retries = 1 if fail_fast else retries
+
+        for attempt in range(max(1, effective_retries)):
             try:
                 response = self._client.chat.completions.create(
                     model=self.model_name,
@@ -182,15 +214,18 @@ class GroqClient:
                 err = str(exc).lower()
 
                 if "429" in err or "rate" in err or "limit" in err:
+                    if fail_fast:
+                        print(f"  ⚡ Rate limited — switching to fallback immediately")
+                        return ""
                     # Try to extract retry-after from the error message
                     retry_after = self._parse_retry_after(str(exc))
                     if retry_after and retry_after < 120:
                         wait = retry_after + 5   # API-suggested wait + small buffer
-                        print(f"  ⏳ Rate limited - API says wait {retry_after}s (attempt {attempt + 1}/{retries})")
+                        print(f"  ⏳ Rate limited - API says wait {retry_after}s (attempt {attempt + 1}/{effective_retries})")
                     else:
                         # TPM exhaustion needs a full window: start at 65s, not 30s
                         wait = 65 * (attempt + 1)
-                        print(f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) - waiting {wait}s...")
+                        print(f"  ⏳ Rate limited (attempt {attempt + 1}/{effective_retries}) - waiting {wait}s...")
                     time.sleep(wait)
                     # Reset TPM window so next call re-checks cleanly
                     self._tokens_this_minute = 0
@@ -207,12 +242,12 @@ class GroqClient:
                     return ""
 
                 print(f"  ❌ Groq error: {exc}")
-                if attempt < retries - 1:
+                if attempt < effective_retries - 1:
                     time.sleep(5)
                     continue
                 return ""
 
-        print(f"  ❌ Failed after {retries} attempts")
+        print(f"  ❌ Failed after {effective_retries} attempts")
         return ""
 
     @staticmethod

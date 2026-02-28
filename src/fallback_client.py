@@ -108,8 +108,20 @@ class FallbackLLMClient:
 
     def _call_primary(self, system_prompt, user_message, max_tokens, **kwargs):
         try:
-            return self.primary.generate(system_prompt, user_message,
-                                         max_tokens=max_tokens, **kwargs)
+            # Pass fail_fast=True so primary returns immediately on rate-limit
+            # instead of sleeping — we'll use secondary instead.
+            return self.primary.generate(
+                system_prompt, user_message,
+                max_tokens=max_tokens, fail_fast=True, **kwargs,
+            )
+        except TypeError:
+            # Primary doesn't support fail_fast (older client); call without it.
+            try:
+                return self.primary.generate(system_prompt, user_message,
+                                             max_tokens=max_tokens, **kwargs)
+            except Exception as exc:
+                print(f"  ⚠️  Primary LLM exception: {exc}")
+                return ""
         except Exception as exc:
             print(f"  ⚠️  Primary LLM exception: {exc}")
             return ""
