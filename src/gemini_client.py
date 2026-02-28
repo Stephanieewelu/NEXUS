@@ -128,7 +128,7 @@ class GeminiClient:
         system_prompt: str,
         user_message: str,
         max_tokens: int = 8192,
-        retries: int = 3,
+        retries: int = 2,
     ) -> str:
         """
         Generate text with smart proactive rate limiting.
@@ -137,7 +137,7 @@ class GeminiClient:
             system_prompt: Instruction / persona for the model.
             user_message:  The actual user turn content.
             max_tokens:    Upper limit on output tokens.
-            retries:       Max attempts on transient errors.
+            retries:       Max attempts on transient errors (default 2 to cap waits).
 
         Returns:
             Model response as a plain string (empty on failure).
@@ -173,15 +173,24 @@ class GeminiClient:
                 err = str(exc).lower()
 
                 if "429" in err or "quota" in err or "rate" in err:
-                    # Actual 429 hit despite pacing — back off harder
-                    wait = 65 * (attempt + 1)   # 65 s, 130 s, 195 s
-                    print(
-                        f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) — "
-                        f"waiting {wait}s…"
-                    )
+                    # Use API-suggested wait if available; otherwise use RPM-based wait.
+                    # Gemini's RPM window is 60s, so 30s*(attempt+1) is enough.
+                    retry_after = self._parse_retry_after(str(exc))
+                    if retry_after:
+                        wait = retry_after + 3
+                        print(
+                            f"  ⏳ Rate limited - Gemini says wait {retry_after}s "
+                            f"(attempt {attempt + 1}/{retries})"
+                        )
+                    else:
+                        wait = 30 * (attempt + 1)   # 30s, 60s — much less than Groq's 65/130s
+                        print(
+                            f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) — "
+                            f"waiting {wait}s…"
+                        )
                     time.sleep(wait)
-                    # Increase future pacing
-                    self._min_delay = min(15.0, self._min_delay + 2.0)
+                    # Increase future pacing slightly but cap it
+                    self._min_delay = min(12.0, self._min_delay + 1.0)
                     print(f"  📊 Adjusted pacing to {self._min_delay:.0f}s/request")
                     continue
 
@@ -198,6 +207,21 @@ class GeminiClient:
 
         print(f"  ❌ Failed after {retries} attempts")
         return ""
+
+    @staticmethod
+    def _parse_retry_after(error_text: str) -> Optional[int]:
+        """Extract retry-after seconds from a Gemini 429 error message."""
+        for pattern in [
+            r"retry.{0,10}after\s+(\d+)",
+            r"retryDelay[\"']?\s*:\s*[\"']?(\d+)",
+            r"try again in\s+(\d+(?:\.\d+)?)\s*s",
+            r"wait\s+(\d+)\s*second",
+            r'"retry_after"\s*:\s*(\d+)',
+        ]:
+            m = re.search(pattern, error_text, re.IGNORECASE)
+            if m:
+                return max(1, int(float(m.group(1))))
+        return None
 
     # ------------------------------------------------------------------
     # JSON extraction
@@ -245,7 +269,7 @@ class GeminiClient:
             except json.JSONDecodeError:
                 pass
 
-        # 4. Ask Gemini to repair (costs 1 API call)
+        # 4. Ask Gemini to repair (1 retry only — don't burn rate limit on repair)
         if len(text) > 50:
             print("  ⚠️  Repairing JSON…")
             try:
@@ -253,6 +277,7 @@ class GeminiClient:
                     "Return ONLY valid JSON. No markdown. No explanation. Fix the JSON below.",
                     text[:3000],
                     max_tokens=4096,
+                    retries=1,
                 )
                 fixed = fixed.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
                 return json.loads(fixed)
