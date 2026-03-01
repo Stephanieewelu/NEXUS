@@ -122,7 +122,7 @@ class GroqClient:
             elapsed = time.time() - self._request_timestamps[-1]
             if elapsed < self._min_delay:
                 wait = self._min_delay - elapsed
-                if fail_fast and wait > 1:
+                if fail_fast and wait > 5:   # only fail_fast for waits >5s; small gaps are fine
                     print(f"  ⚡ Pacing delay {wait:.0f}s — switching to fallback immediately")
                     return False
                 if wait > 1:
