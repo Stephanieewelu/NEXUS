@@ -251,40 +251,34 @@ class BuildOrchestrator:
     def _phase_architecture(self, reqs: dict) -> dict:
         print("\n🏛️  Phase 2: Designing Architecture...")
 
-        # Detect if user description explicitly mentions Python / FastAPI
+        # Derive architecture from requirements without burning an LLM call.
+        # The LLM answer was almost always overridden to "single" (Next.js) anyway,
+        # so we skip the round-trip entirely and apply the same keyword logic directly.
         desc_lower = json.dumps(reqs).lower()
         python_requested = any(w in desc_lower for w in
                                ["python", "fastapi", "flask", "django", "sqlalchemy"])
 
-        system = f"""Design the app architecture. Return ONLY valid JSON:
-{{
-    "structure": "single|fullstack-split",
-    "frontend_framework": "next.js|react-vite",
-    "backend_framework": "next.js-api|fastapi|express",
-    "database": "sqlite|postgresql",
-    "auth": "jwt|session|none"
-}}
-IMPORTANT DEFAULT: ALWAYS use "single" (Next.js fullstack) UNLESS the user
-explicitly mentioned Python, FastAPI, Flask, or Django.
-{"Python/FastAPI was detected  -  fullstack-split is allowed." if python_requested else
- "No Python backend was requested  -  you MUST use structure=single."}"""
-
-        result = self._track_llm_result(
-            self.llm.generate(system, json.dumps(reqs, indent=2)[:3000])
-        )
-        arch = self.llm.extract_json(result)
-
-        # Safety: enforce "single" if Python was not requested
-        if not python_requested and arch.get("structure") == "fullstack-split":
-            print("   ⚠️  LLM chose fullstack-split without Python request  -  overriding to single")
-            arch["structure"] = "single"
-            arch["frontend_framework"] = "next.js"
-            arch["backend_framework"] = "next.js-api"
+        if python_requested:
+            arch = {
+                "structure": "fullstack-split",
+                "frontend_framework": "react-vite",
+                "backend_framework": "fastapi",
+                "database": "sqlite",
+                "auth": "none",
+            }
+        else:
+            arch = {
+                "structure": "single",
+                "frontend_framework": "next.js",
+                "backend_framework": "next.js-api",
+                "database": "none",
+                "auth": "none",
+            }
 
         self.project["architecture"] = arch
-        print(f"   ✅ Structure: {arch.get('structure', '?')}")
-        print(f"   ✅ Frontend: {arch.get('frontend_framework', '?')}")
-        print(f"   ✅ Backend: {arch.get('backend_framework', '?')}")
+        print(f"   ✅ Structure: {arch['structure']} (no LLM call needed)")
+        print(f"   ✅ Frontend: {arch['frontend_framework']}")
+        print(f"   ✅ Backend: {arch['backend_framework']}")
         return arch
 
     # ------------------------------------------------------------------
@@ -762,66 +756,84 @@ OTHER RULES:
 
         file_list.sort(key=sort_key)
 
-        batch_size = 3   # smaller batches = fewer tokens per call = less TPM pressure
-        for i in range(0, len(file_list), batch_size):
-            # Health gate: abort if LLM is consistently failing
-            self._check_llm_health(f"Phase 5 batch {i // batch_size + 1}")
+        # ── Layer-based generation: 2 LLM calls instead of N batch calls ──
+        # Split files into infrastructure (lib/types/utils/hooks/api) and UI
+        # (components/pages/layout) and generate each layer in ONE call.
+        # This cuts Phase 5 from 7+ calls down to 2, dramatically reducing
+        # rate-limit exposure on both Groq (TPM) and Gemini (RPM).
+        _INFRA_CATS = {
+            "config", "frontend-type", "backend-model", "backend-core",
+            "backend-service", "backend-api", "frontend-service", "frontend-hook",
+        }
+        layer_infra = [f for f in file_list if f.get("category", "") in _INFRA_CATS]
+        layer_ui    = [f for f in file_list if f.get("category", "") not in _INFRA_CATS]
 
-            batch = file_list[i : i + batch_size]
-            labels = [f["path"] for f in batch]
-            print(f"\n   📦 Batch {i // batch_size + 1}: {', '.join(labels[:3])}{'…' if len(labels) > 3 else ''}")
+        _gen_rules = (
+            "- Write COMPLETE working code — no placeholders, no '// TODO'\n"
+            "- TypeScript for all files\n"
+            "- NEVER import database packages (pg, mysql2, mongodb, prisma, drizzle-orm, "
+            "sequelize, typeorm, sqlite3, better-sqlite3) — use hardcoded const arrays\n"
+            "- NEVER import from '../lib/db', '../models/', '../services/db' — "
+            "put any needed data as a const array directly in the file\n"
+            "- Components using useState/useEffect MUST have \"use client\" as line 1\n"
+            "- Page files (page.tsx) are Server Components — move any hooks to child components\n"
+            "- All import paths must reference files listed in the blueprint above\n"
+            "- Keep files concise (<100 lines) — generate ALL requested files"
+        )
 
-            gen_system = f"""Generate COMPLETE, working code for these files:
-{json.dumps(batch, indent=2)}
+        for layer_name, layer_files in [("infrastructure", layer_infra), ("UI", layer_ui)]:
+            if not layer_files:
+                continue
 
-App: {json.dumps(reqs, indent=2)[:1500]}
-Already generated (use consistent imports):
-{self._existing_summary()[:2000]}
+            self._check_llm_health(f"Phase 5 {layer_name} layer")
+            print(f"\n   📦 Layer '{layer_name}': {len(layer_files)} file(s)")
 
-Output ONLY valid JSON:
-{{
-    "files": [
-        {{"path": "exact/path", "content": "COMPLETE file content"}}
-    ]
-}}
-RULES:
-- Write COMPLETE code  -  no placeholders, no "// TODO"
-- TypeScript for frontend, Python for backend
-- All imports must reference files in the blueprint
-- NEVER import database packages anywhere (pg, mysql2, mongodb, prisma, drizzle-orm,
-  sequelize, typeorm, sqlite3, better-sqlite3, etc.)  -  use hardcoded mock data arrays
-- NEVER import from '../lib/db', '../models/', '../services/db' or any database utility
-  in pages or components  -  define any needed data as a const array directly in the file
-- Components that use useState/useEffect MUST have "use client" as the very first line
-- Page files (page.tsx) must be Server Components by default  -  move interactivity to child components
-- Data for pages must come from hardcoded const arrays defined in the same file, NOT from DB imports"""
+            # Split very large layers (>8 files) into 2 chunks to stay under token limits
+            _MAX = 8
+            chunks = [layer_files[:_MAX], layer_files[_MAX:]] if len(layer_files) > _MAX else [layer_files]
 
-            result = self._track_llm_result(
-                self.llm.generate(
-                    gen_system,
-                    f"Tech: {json.dumps(tech, indent=2)[:400]}",
-                    max_tokens=6000,
+            for chunk_idx, chunk in enumerate(chunks):
+                if not chunk:
+                    continue
+                chunk_label = f"{layer_name} part {chunk_idx + 1}" if len(chunks) > 1 else layer_name
+
+                gen_system = (
+                    f"Generate COMPLETE working TypeScript code for ALL {len(chunk)} files.\n\n"
+                    f"App: {reqs.get('summary', '')}\n\n"
+                    f"Files to generate:\n{json.dumps(chunk, indent=2)}\n\n"
+                    f"Already generated (keep imports consistent):\n{self._existing_summary()[:1000]}\n\n"
+                    "Return ONLY valid JSON:\n"
+                    '{"files": [{"path": "exact/path", "content": "COMPLETE file content"}]}\n\n'
+                    f"RULES:\n{_gen_rules}"
                 )
-            )
-            data = self.llm.extract_json(result)
 
-            if data and "files" in data:
-                for f in data["files"]:
-                    fpath = f.get("path", "")
-                    content = f.get("content", "")
-                    if not fpath or not content:
-                        continue
-                    if fpath in self.generated_files:
-                        print(f"   ⏭️  Skip (exists): {fpath}")
-                        continue
-                    full = os.path.join(project_path, fpath)
-                    if self.fs.write_file(full, content):
-                        self.generated_files[fpath] = content
-                        print(f"   📝 Written: {fpath}")
-            else:
-                # Fallback: generate one file at a time
-                for f in batch:
-                    self._generate_single_file(f, project_path, reqs, tech)
+                result = self._track_llm_result(
+                    self.llm.generate(
+                        gen_system,
+                        f"Generate all {len(chunk)} {chunk_label} files now.",
+                        max_tokens=8000,
+                    )
+                )
+                data = self.llm.extract_json(result)
+
+                if data and "files" in data:
+                    for f in data["files"]:
+                        fpath = f.get("path", "")
+                        content = f.get("content", "")
+                        if not fpath or not content:
+                            continue
+                        if fpath in self.generated_files:
+                            print(f"   ⏭️  Skip (exists): {fpath}")
+                            continue
+                        full = os.path.join(project_path, fpath)
+                        if self.fs.write_file(full, content):
+                            self.generated_files[fpath] = content
+                            print(f"   📝 Written: {fpath}")
+                else:
+                    # Fallback: generate missing files one at a time
+                    for f in chunk:
+                        if f.get("path", "") not in self.generated_files:
+                            self._generate_single_file(f, project_path, reqs, tech)
 
         # Post-batch disk guarantee: src/app/layout.tsx MUST exist AND be valid
         if not is_split:
@@ -1273,7 +1285,7 @@ RULES:
     # Phase 8  -  Debugging (reads the correct files)
     # ------------------------------------------------------------------
 
-    def _phase_debug(self, project_path: str, tech: dict, errors: str, max_attempts: int = 5):
+    def _phase_debug(self, project_path: str, tech: dict, errors: str, max_attempts: int = 2):
         print("\n🐛 Phase 8: Debugging…")
 
         is_split = tech["type"] == "fullstack-split"
