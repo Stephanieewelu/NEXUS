@@ -251,6 +251,270 @@ export default function Navbar() {{
     # ── Home page ─────────────────────────────────────────────────────────────
 
     @staticmethod
+    def tiktok_generate_page() -> str:
+        """Interactive TikTok Digital Twin content generator — pure client-side, no API needed."""
+        return '''"use client";
+import { useState } from "react";
+
+interface Persona { handle: string; niche: string; tone: string; }
+interface GeneratedContent { hook: string; script: string; hashtags: string[]; caption: string; }
+
+const NICHES = ["Comedy","Fashion","Food","Finance","Fitness","Education","Gaming","Beauty","Travel","Motivation"];
+const TONES  = ["Funny","Casual","Educational","Inspirational","Storytelling","POV","Trendy"];
+const FORMATS = ["Tutorial","Storytime","POV","Tips","Day in My Life","Skit","Reaction"];
+const DURATIONS = ["15s","30s","60s","3min"];
+
+function buildContent(topic: string, persona: Persona, format: string, duration: string): GeneratedContent {
+  const t = topic.trim() || "my content";
+  const tSlug = t.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const hooks: Record<string,string> = {
+    Tutorial:       `POV: You\u2019ve been doing ${t} wrong this whole time \ud83d\ude24`,
+    Storytime:      `The ${t} situation nobody warned me about... \ud83d\udc40`,
+    POV:            `POV: You finally understand ${t} \u2728`,
+    Tips:           `5 things about ${t} that changed my life \ud83e\udd2f`,
+    "Day in My Life":`Come experience ${t} with me today \ud83d\udcf1`,
+    Skit:           `Me before ${t} vs. after \ud83d\udc80`,
+    Reaction:       `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth \ud83d\udc40`,
+  };
+
+  const bodies: Record<string,string> = {
+    Tutorial:
+`Step 1: [Most surprising fact about ${t}]
+Step 2: [The wrong way most people do it]
+Step 3: [The right way \u2014 keep it visual]
+Step 4: [Quick result or transformation]`,
+    Storytime:
+`[Set the scene \u2014 where were you?]
+[What happened with ${t}]
+[The turning point \u2014 make them lean in]
+[The resolution / lesson learned]`,
+    POV:
+`[Put the viewer in the moment with ${t}]
+[Build tension or curiosity in 5s]
+[The reveal or payoff]
+[Relatable reaction shot]`,
+    Tips:
+`Tip 1: [Quick, specific ${t} tip]
+Tip 2: [Something counterintuitive]
+Tip 3: [The one they screenshot]
+Tip 4: [Advanced move]
+Tip 5: [The share-worthy closer]`,
+    "Day in My Life":
+`[Morning \u2014 your ${t} routine]
+[Midday \u2014 real moment or challenge]
+[Evening \u2014 reflection or win]
+[Outro \u2014 call viewer to action]`,
+    Skit:
+`[Setup: exaggerate the old way]
+[Transition: "and then I discovered..."]
+[Payoff: show the better way]
+[Outro: quick reaction shot]`,
+    Reaction:
+`[Show the ${t} trend or clip]
+[Your genuine first reaction]
+[Break down why it works / doesn\u2019t]
+[Your hot take / verdict]`,
+  };
+
+  const ctas: Record<string,string> = {
+    Funny:         `Drop a \ud83d\ude02 if you felt that! Follow ${persona.handle} for more`,
+    Casual:        `Save this! Follow ${persona.handle} for the good stuff \ud83d\udcaf`,
+    Educational:   `Follow ${persona.handle} for more tips like this \ud83e\udde0`,
+    Inspirational: `Share with someone who needs this \ud83d\ude4c`,
+    Storytelling:  `Follow ${persona.handle} \u2014 this is only part 1 \ud83d\udc40`,
+    POV:           `Comment if you relate! Follow for more POVs \ud83d\udcf1`,
+    Trendy:        `Duet this & tag me! ${persona.handle} \ud83d\udd25`,
+  };
+
+  const nicheHtags: Record<string,string[]> = {
+    Comedy:     ["#funny","#comedy","#relatable","#lol"],
+    Fashion:    ["#fashion","#ootd","#style","#outfitinspo"],
+    Food:       ["#foodtok","#recipe","#cooking","#foodie"],
+    Finance:    ["#moneytok","#finance","#investing","#money"],
+    Fitness:    ["#fitnessmotivation","#workout","#gym","#health"],
+    Education:  ["#learnontiktok","#didyouknow","#education","#facts"],
+    Gaming:     ["#gaming","#gamer","#videogames","#gamertok"],
+    Beauty:     ["#beauty","#makeup","#skincare","#beautytips"],
+    Travel:     ["#travel","#wanderlust","#traveltok","#adventure"],
+    Motivation: ["#motivation","#mindset","#success","#inspiration"],
+  };
+
+  const hook    = hooks[format]  ?? `${t} is changing everything \ud83d\udd25`;
+  const body    = bodies[format] ?? `[${duration} of ${persona.niche} content about ${t} \u2014 ${persona.tone} tone]`;
+  const cta     = ctas[persona.tone] ?? `Follow ${persona.handle} for more ${persona.niche} content \ud83d\udd14`;
+  const nHtags  = nicheHtags[persona.niche] ?? ["#foryoupage","#viral","#trending"];
+  const hashtags = ["#fyp","#foryoupage",...nHtags.slice(0,3),`#${tSlug||"tiktok"}`].slice(0,7);
+  const caption = `${hook}\n\n${hashtags.join(" ")}`;
+  const script  = `\ud83c\udfa5 HOOK (first 3s):\n"${hook}"\n\n\ud83d\udcdd BODY (${duration}):\n${body}\n\n\ud83c\udfaf CTA:\n"${cta}"`;
+
+  return { hook, script, hashtags, caption };
+}
+
+export default function GeneratePage() {
+  const [persona, setPersona]   = useState<Persona>({ handle: "@mydigitaltwin", niche: "Education", tone: "Casual" });
+  const [topic, setTopic]       = useState("");
+  const [format, setFormat]     = useState("Tutorial");
+  const [duration, setDuration] = useState("30s");
+  const [result, setResult]     = useState<GeneratedContent | null>(null);
+  const [copied, setCopied]     = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+
+  const handleGenerate = () => {
+    if (!topic.trim()) return;
+    setLoading(true);
+    setTimeout(() => { setResult(buildContent(topic, persona, format, duration)); setLoading(false); }, 1200);
+  };
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold mb-2">
+            Content <span className="text-rose-500">Generator</span>
+          </h1>
+          <p className="text-gray-400">Create viral TikTok scripts, captions &amp; hashtags in your twin&apos;s voice</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ── Twin persona sidebar ── */}
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+            <h2 className="text-lg font-semibold mb-4">\ud83d\udc64 Your Twin</h2>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 mb-1 block">Handle</label>
+              <input
+                value={persona.handle}
+                onChange={(e) => setPersona({ ...persona, handle: e.target.value })}
+                placeholder="@yourhandle"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 mb-2 block">Niche</label>
+              <div className="flex flex-wrap gap-1.5">
+                {NICHES.map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setPersona({ ...persona, niche: n })}
+                    className={`text-xs px-2.5 py-1 rounded-full transition ${persona.niche === n ? "bg-rose-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  >{n}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-2 block">Tone</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TONES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setPersona({ ...persona, tone: t })}
+                    className={`text-xs px-2.5 py-1 rounded-full transition ${persona.tone === t ? "bg-rose-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Generator + results ── */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+              <h2 className="text-lg font-semibold mb-4">\ud83c\udfa5 Create Content</h2>
+              <div className="mb-4">
+                <label className="text-xs text-gray-400 mb-1 block">Topic or Idea</label>
+                <input
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                  placeholder="e.g. morning routines, investing basics, easy recipes..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Format</label>
+                  <select value={format} onChange={(e) => setFormat(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    {FORMATS.map((f) => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Duration</label>
+                  <select value={duration} onChange={(e) => setDuration(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    {DURATIONS.map((d) => <option key={d}>{d}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={!topic.trim() || loading}
+                className="w-full bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2"
+              >
+                {loading ? "\u2728 Generating as your Twin..." : "\u2728 Generate as My Digital Twin"}
+              </button>
+            </div>
+
+            {result && (
+              <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-4">
+                <h2 className="text-lg font-semibold">\ud83d\udce4 Your Content</h2>
+
+                {/* Script */}
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Script</span>
+                    <button onClick={() => copy(result.script, "script")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "script" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                    </button>
+                  </div>
+                  <pre className="text-sm whitespace-pre-wrap text-gray-200 font-sans leading-relaxed">{result.script}</pre>
+                </div>
+
+                {/* Hashtags */}
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Hashtags</span>
+                    <button onClick={() => copy(result.hashtags.join(" "), "tags")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "tags" ? "\u2705 Copied!" : "\ud83d\udccb Copy All"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {result.hashtags.map((tag) => (
+                      <span key={tag} className="bg-rose-900/40 text-rose-300 text-xs px-2.5 py-1 rounded-full border border-rose-800/50">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Caption */}
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Caption</span>
+                    <button onClick={() => copy(result.caption, "caption")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "caption" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{result.caption}</p>
+                </div>
+
+                <button onClick={handleGenerate} className="w-full border border-rose-700 text-rose-400 hover:bg-rose-950 font-medium py-2.5 rounded-xl transition text-sm">
+                  \ud83d\udd04 Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+'''
+
+    @staticmethod
     def home_page(display_name: str, tagline: str, summary: str,
                   features: list, pages: list, color: str) -> str:
         c = _col(color)[0]
@@ -864,6 +1128,32 @@ def _heuristic_requirements(description: str) -> dict:
     app_name = re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-") or "nexus-app"
     tagline = f"The best {display_name} experience, built for you."
 
+    # --- Platform-specific overrides ---
+    app_type = "generic"
+    if "tiktok" in words or "tik tok" in words:
+        app_type = "tiktok_digital_twin"
+        color = "rose"
+        display_name = (
+            "TikTok Digital Twin" if ("twin" in words or "digital" in words)
+            else "TikTok Creator Studio"
+        )
+        app_name = re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
+        tagline = "Your AI digital twin — create viral TikTok content in your voice"
+        features = [
+            {"name": "AI Script Generator", "desc": "Generate hooks, scripts & CTAs in your voice", "icon": "🤖"},
+            {"name": "Smart Hashtags",      "desc": "Data-driven hashtag bundles for max reach",    "icon": "🎯"},
+            {"name": "Digital Twin",        "desc": "Your AI persona trained on your content style", "icon": "👤"},
+            {"name": "Content Calendar",    "desc": "Plan and schedule your TikTok pipeline",        "icon": "📅"},
+            {"name": "Caption Writer",      "desc": "Magnetic captions that drive clicks & follows", "icon": "✍️"},
+            {"name": "Trend Alerts",        "desc": "Spot viral trends that match your niche",       "icon": "📈"},
+        ]
+        pages = [
+            {"name": "Generate", "slug": "generate", "type": "tiktok_generate", "description": "AI content generator"},
+            {"name": "My Twin",  "slug": "twin",     "type": "info",            "description": "Digital twin settings"},
+            {"name": "Library",  "slug": "library",  "type": "list",            "description": "Saved content library"},
+            {"name": "Analytics","slug": "analytics","type": "dashboard",       "description": "Performance analytics"},
+        ]
+
     return {
         "app_name":     app_name,
         "display_name": display_name,
@@ -872,6 +1162,7 @@ def _heuristic_requirements(description: str) -> dict:
         "color":        color,
         "features":     features,
         "pages":        pages,
+        "app_type":     app_type,
         # Compatibility fields for old code paths
         "core_features": [{"name": f["name"], "description": f["desc"]} for f in features],
         "data_models":  [],
@@ -1264,7 +1555,9 @@ RULES:
             desc  = page.get("description", "")
             ptype = page.get("type", "") or _detect_page_type(name, desc, features)
 
-            if ptype == "list":
+            if ptype == "tiktok_generate":
+                content = _T.tiktok_generate_page()
+            elif ptype == "list":
                 content = _T.crud_page(name, slug, color)
             elif ptype == "dashboard":
                 content = _T.dashboard_page(name, color)
