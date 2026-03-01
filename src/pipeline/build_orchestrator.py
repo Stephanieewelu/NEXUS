@@ -1026,12 +1026,15 @@ RULES:
 - Be concise — short names and descriptions only"""
 
         result = self._track_llm_result(
-            self.llm.generate(system, f"App idea:\n{description}", max_tokens=512)
+            # fail_fast=True: if rate-limited, return "" immediately (no sleeping).
+            # retries=1: only one attempt — we have heuristics as instant fallback.
+            self.llm.generate(system, f"App idea:\n{description}", max_tokens=512,
+                              retries=1, fail_fast=True)
         )
         parsed = self.llm.extract_json(result) if result else {}
 
         if not parsed or not parsed.get("display_name"):
-            print("   ⚠️  LLM unavailable — using heuristic parser (0 LLM calls)")
+            print("   ✅ Using heuristic parser (0 wait, 0 LLM calls)")
             reqs = _heuristic_requirements(description)
         else:
             # Normalise the compact LLM response into the standard format

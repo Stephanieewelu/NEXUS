@@ -129,6 +129,7 @@ class GeminiClient:
         user_message: str,
         max_tokens: int = 8192,
         retries: int = 2,
+        fail_fast: bool = False,
     ) -> str:
         """
         Generate text with smart proactive rate limiting.
@@ -138,11 +139,15 @@ class GeminiClient:
             user_message:  The actual user turn content.
             max_tokens:    Upper limit on output tokens.
             retries:       Max attempts on transient errors (default 2 to cap waits).
+            fail_fast:     If True, return "" immediately on rate-limit 429 —
+                           no sleeping, no retrying. Use this when a heuristic
+                           fallback exists and waiting would block the pipeline.
 
         Returns:
             Model response as a plain string (empty on failure).
         """
-        self._smart_rate_limit()
+        if not fail_fast:
+            self._smart_rate_limit()
 
         full_prompt = f"{system_prompt}\n\n---\n\n{user_message}"
 
@@ -173,8 +178,12 @@ class GeminiClient:
                 err = str(exc).lower()
 
                 if "429" in err or "quota" in err or "rate" in err:
+                    if fail_fast:
+                        # Caller has a fallback — don't block the pipeline.
+                        print("  ⚠️  Rate limited — skipping LLM (using heuristics)")
+                        return ""
+
                     # Use API-suggested wait if available; otherwise use RPM-based wait.
-                    # Gemini's RPM window is 60s, so 30s*(attempt+1) is enough.
                     retry_after = self._parse_retry_after(str(exc))
                     if retry_after:
                         wait = retry_after + 3
@@ -183,13 +192,12 @@ class GeminiClient:
                             f"(attempt {attempt + 1}/{retries})"
                         )
                     else:
-                        wait = 30 * (attempt + 1)   # 30s, 60s — much less than Groq's 65/130s
+                        wait = 30 * (attempt + 1)
                         print(
                             f"  ⏳ Rate limited (attempt {attempt + 1}/{retries}) — "
                             f"waiting {wait}s…"
                         )
                     time.sleep(wait)
-                    # Increase future pacing slightly but cap it
                     self._min_delay = min(12.0, self._min_delay + 1.0)
                     print(f"  📊 Adjusted pacing to {self._min_delay:.0f}s/request")
                     continue
