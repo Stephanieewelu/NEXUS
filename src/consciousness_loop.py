@@ -170,8 +170,12 @@ class ConsciousnessLoop:
                     print("\n🌑 NEXUS entering hibernation…")
                     break
 
-                if low.startswith("build "):
-                    description = user_input[6:].strip()
+                # Match "build <desc>" with typo tolerance (e.g. "builld", "buidl")
+                import re as _re
+                _bm = _re.match(r'^buil+[a-z]*d+\s+(.+)', user_input.strip(),
+                                _re.IGNORECASE | _re.DOTALL)
+                if _bm:
+                    description = _bm.group(1).strip()
                     if description:
                         self._run_build(description)
                     else:
