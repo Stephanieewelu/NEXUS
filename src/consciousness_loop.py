@@ -113,7 +113,9 @@ class ConsciousnessLoop:
         """Full perception-cognition-response cycle."""
         self.core.pre_interaction(user_input)
         system_prompt = self.core.build_system_prompt()
-        response_text = self.llm.generate(system_prompt, user_input)
+        # fail_fast=True: if both providers are rate-limited, return "" immediately
+        # rather than blocking the REPL for minutes. The user can retry shortly.
+        response_text = self.llm.generate(system_prompt, user_input, fail_fast=True)
         self.core.post_interaction(user_input, response_text)
         return response_text
 
@@ -220,7 +222,11 @@ class ConsciousnessLoop:
 
                 response = self.sense_and_think(user_input)
                 gen = self.core.dna.generation
-                print(f"\n🌟 NEXUS (gen-{gen}): {response}")
+                if response:
+                    print(f"\n🌟 NEXUS (gen-{gen}): {response}")
+                else:
+                    print(f"\n⏸️  NEXUS (gen-{gen}): Both LLM providers are rate-limited right now."
+                          f" Try again in ~60s, or use 'build <description>' to create an app.")
 
             except KeyboardInterrupt:
                 print("\n\n🌑 NEXUS entering emergency hibernation…")

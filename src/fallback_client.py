@@ -128,9 +128,20 @@ class FallbackLLMClient:
 
     def _call_secondary(self, system_prompt, user_message, max_tokens, **kwargs):
         try:
-            # Gemini's max_tokens param name is the same; cap at 8192
+            # Always fail_fast on secondary: primary already failed, so if secondary
+            # is also rate-limited we want an instant empty return, not more sleeping.
+            kwargs.setdefault("fail_fast", True)
             return self.secondary.generate(system_prompt, user_message,
                                            max_tokens=min(max_tokens, 8192), **kwargs)
+        except TypeError:
+            # Secondary doesn't support fail_fast — call without it.
+            try:
+                kwargs.pop("fail_fast", None)
+                return self.secondary.generate(system_prompt, user_message,
+                                               max_tokens=min(max_tokens, 8192), **kwargs)
+            except Exception as exc:
+                print(f"  ⚠️  Secondary LLM exception: {exc}")
+                return ""
         except Exception as exc:
             print(f"  ⚠️  Secondary LLM exception: {exc}")
             return ""
