@@ -269,13 +269,13 @@ function buildContent(topic: string, persona: Persona, format: string, duration:
   const tSlug = t.toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const hooks: Record<string,string> = {
-    Tutorial:       `POV: You\u2019ve been doing ${t} wrong this whole time \ud83d\ude24`,
-    Storytime:      `The ${t} situation nobody warned me about... \ud83d\udc40`,
+    Tutorial:       `POV: You\u2019ve been doing ${t} wrong this whole time 😤`,
+    Storytime:      `The ${t} situation nobody warned me about... 👀`,
     POV:            `POV: You finally understand ${t} \u2728`,
-    Tips:           `5 things about ${t} that changed my life \ud83e\udd2f`,
-    "Day in My Life":`Come experience ${t} with me today \ud83d\udcf1`,
-    Skit:           `Me before ${t} vs. after \ud83d\udc80`,
-    Reaction:       `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth \ud83d\udc40`,
+    Tips:           `5 things about ${t} that changed my life 🤯`,
+    "Day in My Life":`Come experience ${t} with me today 📱`,
+    Skit:           `Me before ${t} vs. after 💀`,
+    Reaction:       `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth 👀`,
   };
 
   const bodies: Record<string,string> = {
@@ -318,13 +318,13 @@ Tip 5: [The share-worthy closer]`,
   };
 
   const ctas: Record<string,string> = {
-    Funny:         `Drop a \ud83d\ude02 if you felt that! Follow ${persona.handle} for more`,
-    Casual:        `Save this! Follow ${persona.handle} for the good stuff \ud83d\udcaf`,
-    Educational:   `Follow ${persona.handle} for more tips like this \ud83e\udde0`,
-    Inspirational: `Share with someone who needs this \ud83d\ude4c`,
-    Storytelling:  `Follow ${persona.handle} \u2014 this is only part 1 \ud83d\udc40`,
-    POV:           `Comment if you relate! Follow for more POVs \ud83d\udcf1`,
-    Trendy:        `Duet this & tag me! ${persona.handle} \ud83d\udd25`,
+    Funny:         `Drop a 😂 if you felt that! Follow ${persona.handle} for more`,
+    Casual:        `Save this! Follow ${persona.handle} for the good stuff 💯`,
+    Educational:   `Follow ${persona.handle} for more tips like this 🧠`,
+    Inspirational: `Share with someone who needs this 🙌`,
+    Storytelling:  `Follow ${persona.handle} \u2014 this is only part 1 👀`,
+    POV:           `Comment if you relate! Follow for more POVs 📱`,
+    Trendy:        `Duet this & tag me! ${persona.handle} 🔥`,
   };
 
   const nicheHtags: Record<string,string[]> = {
@@ -340,13 +340,13 @@ Tip 5: [The share-worthy closer]`,
     Motivation: ["#motivation","#mindset","#success","#inspiration"],
   };
 
-  const hook    = hooks[format]  ?? `${t} is changing everything \ud83d\udd25`;
+  const hook    = hooks[format]  ?? `${t} is changing everything 🔥`;
   const body    = bodies[format] ?? `[${duration} of ${persona.niche} content about ${t} \u2014 ${persona.tone} tone]`;
-  const cta     = ctas[persona.tone] ?? `Follow ${persona.handle} for more ${persona.niche} content \ud83d\udd14`;
+  const cta     = ctas[persona.tone] ?? `Follow ${persona.handle} for more ${persona.niche} content 🔔`;
   const nHtags  = nicheHtags[persona.niche] ?? ["#foryoupage","#viral","#trending"];
   const hashtags = ["#fyp","#foryoupage",...nHtags.slice(0,3),`#${tSlug||"tiktok"}`].slice(0,7);
   const caption = `${hook}\n\n${hashtags.join(" ")}`;
-  const script  = `\ud83c\udfa5 HOOK (first 3s):\n"${hook}"\n\n\ud83d\udcdd BODY (${duration}):\n${body}\n\n\ud83c\udfaf CTA:\n"${cta}"`;
+  const script  = `🎥 HOOK (first 3s):\n"${hook}"\n\n📝 BODY (${duration}):\n${body}\n\n🎯 CTA:\n"${cta}"`;
 
   return { hook, script, hashtags, caption };
 }
@@ -385,7 +385,7 @@ export default function GeneratePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ── Twin persona sidebar ── */}
           <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-            <h2 className="text-lg font-semibold mb-4">\ud83d\udc64 Your Twin</h2>
+            <h2 className="text-lg font-semibold mb-4">👤 Your Twin</h2>
             <div className="mb-4">
               <label className="text-xs text-gray-400 mb-1 block">Handle</label>
               <input
@@ -424,7 +424,7 @@ export default function GeneratePage() {
           {/* ── Generator + results ── */}
           <div className="lg:col-span-2 space-y-5">
             <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-              <h2 className="text-lg font-semibold mb-4">\ud83c\udfa5 Create Content</h2>
+              <h2 className="text-lg font-semibold mb-4">🎥 Create Content</h2>
               <div className="mb-4">
                 <label className="text-xs text-gray-400 mb-1 block">Topic or Idea</label>
                 <input
@@ -462,14 +462,14 @@ export default function GeneratePage() {
 
             {result && (
               <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-4">
-                <h2 className="text-lg font-semibold">\ud83d\udce4 Your Content</h2>
+                <h2 className="text-lg font-semibold">📤 Your Content</h2>
 
                 {/* Script */}
                 <div className="bg-gray-800 rounded-xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Script</span>
                     <button onClick={() => copy(result.script, "script")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "script" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                      {copied === "script" ? "\u2705 Copied!" : "📋 Copy"}
                     </button>
                   </div>
                   <pre className="text-sm whitespace-pre-wrap text-gray-200 font-sans leading-relaxed">{result.script}</pre>
@@ -480,7 +480,7 @@ export default function GeneratePage() {
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Hashtags</span>
                     <button onClick={() => copy(result.hashtags.join(" "), "tags")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "tags" ? "\u2705 Copied!" : "\ud83d\udccb Copy All"}
+                      {copied === "tags" ? "\u2705 Copied!" : "📋 Copy All"}
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -495,14 +495,14 @@ export default function GeneratePage() {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Caption</span>
                     <button onClick={() => copy(result.caption, "caption")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "caption" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                      {copied === "caption" ? "\u2705 Copied!" : "📋 Copy"}
                     </button>
                   </div>
                   <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{result.caption}</p>
                 </div>
 
                 <button onClick={handleGenerate} className="w-full border border-rose-700 text-rose-400 hover:bg-rose-950 font-medium py-2.5 rounded-xl transition text-sm">
-                  \ud83d\udd04 Regenerate
+                  🔄 Regenerate
                 </button>
               </div>
             )}
@@ -1444,13 +1444,13 @@ function buildContent(topic: string, persona: Persona, format: string, duration:
   const tSlug = t.toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const hooks: Record<string,string> = {
-    Tutorial:        `POV: You\u2019ve been doing ${t} wrong this whole time \ud83d\ude24`,
-    Storytime:       `The ${t} situation nobody warned me about... \ud83d\udc40`,
+    Tutorial:        `POV: You\u2019ve been doing ${t} wrong this whole time 😤`,
+    Storytime:       `The ${t} situation nobody warned me about... 👀`,
     POV:             `POV: You finally understand ${t} \u2728`,
-    Tips:            `5 things about ${t} that changed my life \ud83e\udd2f`,
-    "Day in My Life":`Come experience ${t} with me today \ud83d\udcf1`,
-    Skit:            `Me before ${t} vs. after \ud83d\udc80`,
-    Reaction:        `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth \ud83d\udc40`,
+    Tips:            `5 things about ${t} that changed my life 🤯`,
+    "Day in My Life":`Come experience ${t} with me today 📱`,
+    Skit:            `Me before ${t} vs. after 💀`,
+    Reaction:        `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth 👀`,
   };
   const bodies: Record<string,string> = {
     Tutorial:        `Step 1: [Most surprising fact about ${t}]\nStep 2: [The wrong way most people do it]\nStep 3: [The right way \u2014 keep it visual]\nStep 4: [Quick result or transformation]`,
@@ -1462,13 +1462,13 @@ function buildContent(topic: string, persona: Persona, format: string, duration:
     Reaction:        `[Show the ${t} trend or clip]\n[Your genuine first reaction]\n[Break down why it works / doesn\u2019t]\n[Your hot take / verdict]`,
   };
   const ctas: Record<string,string> = {
-    Funny:          `Drop a \ud83d\ude02 if you felt that! Follow ${persona.handle} for more`,
-    Casual:         `Save this! Follow ${persona.handle} for the good stuff \ud83d\udcaf`,
-    Educational:    `Follow ${persona.handle} for more tips like this \ud83e\udde0`,
-    Inspirational:  `Share with someone who needs this \ud83d\ude4c`,
-    Storytelling:   `Follow ${persona.handle} \u2014 this is only part 1 \ud83d\udc40`,
-    POV:            `Comment if you relate! Follow for more POVs \ud83d\udcf1`,
-    Trendy:         `Duet this & tag me! ${persona.handle} \ud83d\udd25`,
+    Funny:          `Drop a 😂 if you felt that! Follow ${persona.handle} for more`,
+    Casual:         `Save this! Follow ${persona.handle} for the good stuff 💯`,
+    Educational:    `Follow ${persona.handle} for more tips like this 🧠`,
+    Inspirational:  `Share with someone who needs this 🙌`,
+    Storytelling:   `Follow ${persona.handle} \u2014 this is only part 1 👀`,
+    POV:            `Comment if you relate! Follow for more POVs 📱`,
+    Trendy:         `Duet this & tag me! ${persona.handle} 🔥`,
   };
   const nicheHtags: Record<string,string[]> = {
     Comedy:["#funny","#comedy","#relatable","#lol"],Fashion:["#fashion","#ootd","#style","#outfitinspo"],
@@ -1477,13 +1477,13 @@ function buildContent(topic: string, persona: Persona, format: string, duration:
     Gaming:["#gaming","#gamer","#videogames","#gamertok"],Beauty:["#beauty","#makeup","#skincare","#beautytips"],
     Travel:["#travel","#wanderlust","#traveltok","#adventure"],Motivation:["#motivation","#mindset","#success","#inspiration"],
   };
-  const hook     = hooks[format]      ?? `${t} is changing everything \ud83d\udd25`;
+  const hook     = hooks[format]      ?? `${t} is changing everything 🔥`;
   const body     = bodies[format]     ?? `[${duration} of ${persona.niche} content about ${t} \u2014 ${persona.tone} tone]`;
-  const cta      = ctas[persona.tone] ?? `Follow ${persona.handle} for more \ud83d\udd14`;
+  const cta      = ctas[persona.tone] ?? `Follow ${persona.handle} for more 🔔`;
   const nHtags   = nicheHtags[persona.niche] ?? ["#foryoupage","#viral","#trending"];
   const hashtags = ["#fyp","#foryoupage",...nHtags.slice(0,3),`#${tSlug||"tiktok"}`].slice(0,7);
   const caption  = `${hook}\n\n${hashtags.join(" ")}`;
-  const script   = `\ud83c\udfa5 HOOK (first 3s):\n"${hook}"\n\n\ud83d\udcdd BODY (${duration}):\n${body}\n\n\ud83c\udfaf CTA:\n"${cta}"`;
+  const script   = `🎥 HOOK (first 3s):\n"${hook}"\n\n📝 BODY (${duration}):\n${body}\n\n🎯 CTA:\n"${cta}"`;
   return { hook, script, hashtags, caption };
 }
 
@@ -1544,7 +1544,7 @@ export default function GeneratePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Twin persona sidebar */}
           <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-            <h2 className="text-lg font-semibold mb-4">\ud83d\udc64 Your Twin</h2>
+            <h2 className="text-lg font-semibold mb-4">👤 Your Twin</h2>
             <div className="mb-4">
               <label className="text-xs text-gray-400 mb-1 block">Handle</label>
               <input value={persona.handle} onChange={(e) => setPersona({ ...persona, handle: e.target.value })}
@@ -1576,7 +1576,7 @@ export default function GeneratePage() {
           {/* Generator + results */}
           <div className="lg:col-span-2 space-y-5">
             <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
-              <h2 className="text-lg font-semibold mb-4">\ud83c\udfa5 Create Content</h2>
+              <h2 className="text-lg font-semibold mb-4">🎥 Create Content</h2>
               <div className="mb-4">
                 <label className="text-xs text-gray-400 mb-1 block">Topic or Idea</label>
                 <input value={topic} onChange={(e) => setTopic(e.target.value)}
@@ -1609,12 +1609,12 @@ export default function GeneratePage() {
             {result && (
               <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">\ud83d\udce4 Your Content</h2>
+                  <h2 className="text-lg font-semibold">📤 Your Content</h2>
                   <div className="flex items-center gap-3">
                     {savedMsg && <span className="text-xs text-green-400">{savedMsg}</span>}
                     <button onClick={handleSave} disabled={saving}
                       className="text-xs bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition">
-                      {saving ? "Saving\u2026" : "\ud83d\udcbe Save to Library"}
+                      {saving ? "Saving\u2026" : "💾 Save to Library"}
                     </button>
                   </div>
                 </div>
@@ -1623,7 +1623,7 @@ export default function GeneratePage() {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Script</span>
                     <button onClick={() => copy(result.script, "script")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "script" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                      {copied === "script" ? "\u2705 Copied!" : "📋 Copy"}
                     </button>
                   </div>
                   <pre className="text-sm whitespace-pre-wrap text-gray-200 font-sans leading-relaxed">{result.script}</pre>
@@ -1633,7 +1633,7 @@ export default function GeneratePage() {
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Hashtags</span>
                     <button onClick={() => copy(result.hashtags.join(" "), "tags")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "tags" ? "\u2705 Copied!" : "\ud83d\udccb Copy All"}
+                      {copied === "tags" ? "\u2705 Copied!" : "📋 Copy All"}
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1647,14 +1647,14 @@ export default function GeneratePage() {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Caption</span>
                     <button onClick={() => copy(result.caption, "caption")} className="text-xs text-rose-400 hover:text-rose-300 transition">
-                      {copied === "caption" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                      {copied === "caption" ? "\u2705 Copied!" : "📋 Copy"}
                     </button>
                   </div>
                   <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{result.caption}</p>
                 </div>
 
                 <button onClick={handleGenerate} className="w-full border border-rose-700 text-rose-400 hover:bg-rose-950 font-medium py-2.5 rounded-xl transition text-sm">
-                  \ud83d\udd04 Regenerate
+                  🔄 Regenerate
                 </button>
               </div>
             )}
@@ -1727,11 +1727,11 @@ export default function LibraryPage() {
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">\ud83d\udcda Content Library</h1>
+            <h1 className="text-3xl font-bold">📚 Content Library</h1>
             <p className="text-gray-400 text-sm mt-1">{items.length} saved piece{items.length !== 1 ? "s" : ""}</p>
           </div>
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="\ud83d\udd0d Search by topic, niche..."
+            placeholder="🔍 Search by topic, niche..."
             className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 w-48" />
         </div>
 
@@ -1739,7 +1739,7 @@ export default function LibraryPage() {
           <div className="text-center py-20 text-gray-500">Loading your library\u2026</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-5xl mb-4">{search ? "\ud83d\udd0d" : "\ud83d\udcf9"}</p>
+            <p className="text-5xl mb-4">{search ? "🔍" : "📹"}</p>
             <p className="text-gray-400 text-lg">{search ? "No results found." : "No saved content yet."}</p>
             <p className="text-gray-600 text-sm mt-2">{!search && "Generate content and hit \u201cSave to Library\u201d to see it here."}</p>
           </div>
@@ -1776,11 +1776,11 @@ export default function LibraryPage() {
                   <div className="flex gap-2">
                     <button onClick={() => copy(item.script, `script-${item.id}`)}
                       className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition">
-                      {copied === `script-${item.id}` ? "\u2705 Copied!" : "\ud83d\udccb Copy Script"}
+                      {copied === `script-${item.id}` ? "\u2705 Copied!" : "📋 Copy Script"}
                     </button>
                     <button onClick={() => copy(item.caption, `caption-${item.id}`)}
                       className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition">
-                      {copied === `caption-${item.id}` ? "\u2705 Copied!" : "\ud83d\udccb Copy Caption"}
+                      {copied === `caption-${item.id}` ? "\u2705 Copied!" : "📋 Copy Caption"}
                     </button>
                   </div>
                 </div>

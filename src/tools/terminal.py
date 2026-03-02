@@ -58,7 +58,8 @@ class TerminalTool:
                 shell=True,
                 cwd=working_dir,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=self.env,
             )
@@ -87,7 +88,8 @@ class TerminalTool:
             cwd=working_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             env=self.env,
         )
         assert process.stdout is not None
