@@ -1794,6 +1794,525 @@ export default function LibraryPage() {
 }
 '''
 
+    # ── Task Manager — Kanban board ───────────────────────────────────────────
+
+    @staticmethod
+    def kanban_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+const COLS = ["To Do", "In Progress", "Done"] as const;
+type Col = typeof COLS[number];
+interface Task {{ id: string; title: string; col: Col; priority: "low" | "medium" | "high"; }}
+const PRI = {{ low: "text-green-400", medium: "text-yellow-400", high: "text-red-400" }};
+
+export default function BoardPage() {{
+  const [tasks, setTasks] = useState<Task[]>([
+    {{ id: "1", title: "Set up project structure", col: "Done",        priority: "high"   }},
+    {{ id: "2", title: "Design database schema",   col: "In Progress", priority: "high"   }},
+    {{ id: "3", title: "Build API endpoints",       col: "To Do",       priority: "medium" }},
+    {{ id: "4", title: "Write documentation",       col: "To Do",       priority: "low"    }},
+  ]);
+  const [input, setInput]       = useState("");
+  const [targetCol, setTarget]  = useState<Col>("To Do");
+
+  const add = () => {{
+    if (!input.trim()) return;
+    setTasks(p => [...p, {{ id: Date.now().toString(), title: input.trim(), col: targetCol, priority: "medium" }}]);
+    setInput("");
+  }};
+  const move   = (id: string, col: Col) => setTasks(p => p.map(t => t.id === id ? {{ ...t, col }} : t));
+  const remove = (id: string)           => setTasks(p => p.filter(t => t.id !== id));
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-7xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-1">📋 Board</h1>
+          <p className="text-gray-400">{{tasks.length}} tasks total</p>
+        </div>
+        <div className="flex gap-2 mb-8">
+          <input value={{input}} onChange={{e => setInput(e.target.value)}} onKeyDown={{e => e.key === "Enter" && add()}}
+            placeholder="Add a task…" className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-{c}-500" />
+          <select value={{targetCol}} onChange={{e => setTarget(e.target.value as Col)}} className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+            {{COLS.map(c => <option key={{c}}>{{c}}</option>)}}
+          </select>
+          <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">Add</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {{COLS.map(col => (
+            <div key={{col}} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">{{col}}</h2>
+                <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{{tasks.filter(t => t.col === col).length}}</span>
+              </div>
+              <div className="space-y-2">
+                {{tasks.filter(t => t.col === col).map(task => (
+                  <div key={{task.id}} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+                    <p className="text-sm text-white mb-2">{{task.title}}</p>
+                    <div className="flex items-center justify-between">
+                      <span className={{`text-xs font-medium ${{PRI[task.priority]}}`}}>{{task.priority}}</span>
+                      <div className="flex gap-1">
+                        {{COLS.filter(c => c !== col).map(c => (
+                          <button key={{c}} onClick={{() => move(task.id, c)}} className="text-xs text-gray-500 hover:text-white border border-gray-600 px-1.5 py-0.5 rounded transition">→ {{c.split(" ")[0]}}</button>
+                        ))}}
+                        <button onClick={{() => remove(task.id)}} className="text-xs text-gray-600 hover:text-red-400 transition ml-1">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}}
+                {{tasks.filter(t => t.col === col).length === 0 && (
+                  <p className="text-gray-600 text-sm text-center py-6">No tasks here</p>
+                )}}
+              </div>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── CRM — Contacts list ───────────────────────────────────────────────────
+
+    @staticmethod
+    def crm_contacts_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+interface Contact {{ id: string; name: string; email: string; phone: string; company: string; status: "lead" | "active" | "closed"; }}
+const S_COLOR = {{ lead: "bg-yellow-900/40 text-yellow-300", active: "bg-green-900/40 text-green-300", closed: "bg-gray-800 text-gray-400" }};
+
+export default function ContactsPage() {{
+  const [contacts, setContacts] = useState<Contact[]>([
+    {{ id: "1", name: "Alex Johnson",  email: "alex@acme.com",    phone: "+1 555-0101", company: "Acme Corp",   status: "active" }},
+    {{ id: "2", name: "Maria Garcia",  email: "maria@startup.io", phone: "+1 555-0102", company: "Startup IO",  status: "lead"   }},
+    {{ id: "3", name: "James Lee",     email: "james@bigco.com",  phone: "+1 555-0103", company: "BigCo Inc",   status: "lead"   }},
+  ]);
+  const [search, setSearch] = useState("");
+  const [form, setForm]     = useState({{ name: "", email: "", phone: "", company: "" }});
+  const [adding, setAdding] = useState(false);
+
+  const filtered = contacts.filter(c =>
+    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.company.toLowerCase().includes(search.toLowerCase()) ||
+    c.email.toLowerCase().includes(search.toLowerCase())
+  );
+  const add = () => {{
+    if (!form.name.trim()) return;
+    setContacts(p => [...p, {{ ...form, id: Date.now().toString(), status: "lead" as const }}]);
+    setForm({{ name: "", email: "", phone: "", company: "" }});
+    setAdding(false);
+  }};
+  const promote = (id: string) => setContacts(p => p.map(c => {{
+    if (c.id !== id) return c;
+    const next = {{ lead: "active", active: "closed", closed: "lead" }} as const;
+    return {{ ...c, status: next[c.status] }};
+  }}));
+  const remove = (id: string) => setContacts(p => p.filter(c => c.id !== id));
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">👥 Contacts</h1>
+            <p className="text-gray-400 text-sm mt-1">{{contacts.length}} contacts</p>
+          </div>
+          <div className="flex gap-3">
+            <input value={{search}} onChange={{e => setSearch(e.target.value)}} placeholder="🔍 Search…"
+              className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none w-48" />
+            <button onClick={{() => setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Add</button>
+          </div>
+        </div>
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 mb-6 grid grid-cols-2 gap-4">
+            {{(["name","email","phone","company"] as const).map(k => (
+              <input key={{k}} value={{form[k]}} onChange={{e => setForm(p => ({{...p, [k]: e.target.value}}))}}
+                placeholder={{k.charAt(0).toUpperCase()+k.slice(1)}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            ))}}
+            <div className="col-span-2 flex gap-2">
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save</button>
+              <button onClick={{() => setAdding(false)}} className="border border-gray-700 px-4 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+          </div>
+        )}}
+        <div className="space-y-3">
+          {{filtered.map(c => (
+            <div key={{c.id}} className="bg-gray-900 rounded-2xl p-4 border border-gray-800 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-{c}-900/50 flex items-center justify-center text-{c}-300 font-bold shrink-0">{{c.name[0]}}</div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">{{c.name}}</p>
+                <p className="text-gray-400 text-xs">{{c.email}} · {{c.company}}</p>
+              </div>
+              <span className="text-gray-400 text-sm hidden sm:block">{{c.phone}}</span>
+              <button onClick={{() => promote(c.id)}} className={{`text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer ${{S_COLOR[c.status]}}`}}>{{c.status}}</button>
+              <button onClick={{() => remove(c.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── CRM — Deal pipeline ───────────────────────────────────────────────────
+
+    @staticmethod
+    def crm_pipeline_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+const STAGES = ["Lead","Contacted","Proposal","Negotiation","Won","Lost"] as const;
+type Stage = typeof STAGES[number];
+const COL_BG: Record<Stage,string> = {{
+  Lead:"bg-gray-900 border-gray-700", Contacted:"bg-blue-950 border-blue-800",
+  Proposal:"bg-purple-950 border-purple-800", Negotiation:"bg-yellow-950 border-yellow-800",
+  Won:"bg-green-950 border-green-800", Lost:"bg-red-950 border-red-800",
+}};
+interface Deal {{ id: string; title: string; value: number; stage: Stage; contact: string; }}
+
+export default function PipelinePage() {{
+  const [deals, setDeals] = useState<Deal[]>([
+    {{ id: "1", title: "Enterprise License", value: 12000, stage: "Proposal",    contact: "Alex Johnson" }},
+    {{ id: "2", title: "Starter Package",    value: 2400,  stage: "Contacted",   contact: "Maria Garcia" }},
+    {{ id: "3", title: "Growth Plan",        value: 5000,  stage: "Negotiation", contact: "James Lee"    }},
+    {{ id: "4", title: "Basic Plan",         value: 800,   stage: "Won",         contact: "Sam Wilson"   }},
+  ]);
+  const [form, setForm]     = useState({{ title: "", value: "", contact: "" }});
+  const [adding, setAdding] = useState(false);
+
+  const add = () => {{
+    if (!form.title.trim()) return;
+    setDeals(p => [...p, {{ ...form, id: Date.now().toString(), stage: "Lead" as const, value: Number(form.value)||0 }}]);
+    setForm({{ title: "", value: "", contact: "" }});
+    setAdding(false);
+  }};
+  const move  = (id: string, stage: Stage) => setDeals(p => p.map(d => d.id === id ? {{ ...d, stage }} : d));
+  const total = deals.filter(d => d.stage === "Won").reduce((s, d) => s + d.value, 0);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-7xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">💼 Pipeline</h1>
+            <p className="text-gray-400 text-sm mt-1">${{total.toLocaleString()}} closed</p>
+          </div>
+          <button onClick={{() => setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Deal</button>
+        </div>
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 flex gap-3 flex-wrap">
+            <input value={{form.title}} onChange={{e => setForm(p=>{{...p,title:e.target.value}})}} placeholder="Deal title"  className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.contact}} onChange={{e => setForm(p=>{{...p,contact:e.target.value}})}} placeholder="Contact" className="flex-1 min-w-[140px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.value}} onChange={{e => setForm(p=>{{...p,value:e.target.value}})}} placeholder="Value ($)" type="number" className="w-28 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Add</button>
+          </div>
+        )}}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {{STAGES.map(stage => (
+            <div key={{stage}} className="space-y-2">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider px-1">
+                {{stage}} <span className="text-gray-600">({{deals.filter(d=>d.stage===stage).length}})</span>
+              </p>
+              {{deals.filter(d => d.stage === stage).map(deal => (
+                <div key={{deal.id}} className={{`rounded-xl p-3 border ${{COL_BG[stage]}}`}}>
+                  <p className="font-medium text-white text-xs leading-tight mb-1">{{deal.title}}</p>
+                  <p className="text-gray-400 text-xs mb-1">{{deal.contact}}</p>
+                  <p className="text-green-400 font-bold text-xs mb-2">${{deal.value.toLocaleString()}}</p>
+                  <select value={{deal.stage}} onChange={{e => move(deal.id, e.target.value as Stage)}}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg text-xs px-1 py-0.5">
+                    {{STAGES.map(s => <option key={{s}}>{{s}}</option>)}}
+                  </select>
+                </div>
+              ))}}
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── E-commerce — Products grid ────────────────────────────────────────────
+
+    @staticmethod
+    def ecommerce_products_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+interface Product {{ id: string; name: string; price: number; stock: number; category: string; status: "active" | "draft"; }}
+const CATS = ["All","Electronics","Clothing","Home","Beauty","Sports","Food"];
+
+export default function ProductsPage() {{
+  const [products, setProducts] = useState<Product[]>([
+    {{ id: "1", name: "Wireless Headphones", price: 79.99,  stock: 42, category: "Electronics", status: "active" }},
+    {{ id: "2", name: "Running Shoes",        price: 129.99, stock: 18, category: "Sports",      status: "active" }},
+    {{ id: "3", name: "Face Serum",           price: 34.99,  stock: 0,  category: "Beauty",      status: "draft"  }},
+    {{ id: "4", name: "Smart Watch",          price: 199.99, stock: 7,  category: "Electronics", status: "active" }},
+  ]);
+  const [cat, setCat]       = useState("All");
+  const [form, setForm]     = useState({{ name: "", price: "", stock: "", category: "Electronics" }});
+  const [adding, setAdding] = useState(false);
+
+  const filtered = products.filter(p => cat === "All" || p.category === cat);
+  const add = () => {{
+    if (!form.name.trim()) return;
+    setProducts(p => [...p, {{ ...form, id: Date.now().toString(), price: Number(form.price), stock: Number(form.stock), status: "active" as const }}]);
+    setForm({{ name: "", price: "", stock: "", category: "Electronics" }});
+    setAdding(false);
+  }};
+  const toggle = (id: string) => setProducts(p => p.map(p2 => p2.id === id ? {{ ...p2, status: p2.status === "active" ? "draft" : "active" }} : p2));
+  const remove = (id: string) => setProducts(p => p.filter(p2 => p2.id !== id));
+  const invVal = products.reduce((s, p) => s + p.price * p.stock, 0);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">🛍️ Products</h1>
+            <p className="text-gray-400 text-sm mt-1">{{products.length}} products · ${{{invVal.toLocaleString()}}} inventory value</p>
+          </div>
+          <button onClick={{() => setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Product</button>
+        </div>
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {{CATS.map(c2 => (
+            <button key={{c2}} onClick={{() => setCat(c2)}} className={{`px-3 py-1.5 rounded-lg text-sm transition ${{cat===c2?"bg-{c}-600 text-white":"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{c2}}</button>
+          ))}}
+        </div>
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 grid grid-cols-2 gap-3">
+            <input value={{form.name}} onChange={{e=>setForm(p=>{{...p,name:e.target.value}})}} placeholder="Product name" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.price}} onChange={{e=>setForm(p=>{{...p,price:e.target.value}})}} placeholder="Price ($)" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.stock}} onChange={{e=>setForm(p=>{{...p,stock:e.target.value}})}} placeholder="Stock qty" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+              {{CATS.slice(1).map(c2=><option key={{c2}}>{{c2}}</option>)}}
+            </select>
+            <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Add Product</button>
+          </div>
+        )}}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {{filtered.map(p => (
+            <div key={{p.id}} className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+              <div className="flex justify-between items-start mb-3">
+                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{{p.category}}</span>
+                <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{p.status==="active"?"bg-green-900/40 text-green-300":"bg-gray-800 text-gray-500"}}`}}>{{p.status}}</span>
+              </div>
+              <h3 className="font-semibold text-white mb-1">{{p.name}}</h3>
+              <p className="text-2xl font-bold text-{c}-400 mb-1">${{{p.price.toFixed(2)}}}</p>
+              <p className={{`text-xs mb-4 ${{p.stock===0?"text-red-400":p.stock<10?"text-yellow-400":"text-gray-400"}}`}}>
+                {{p.stock===0?"Out of stock":`${{p.stock}} in stock`}}
+              </p>
+              <div className="flex gap-2">
+                <button onClick={{()=>toggle(p.id)}} className="flex-1 text-xs border border-gray-700 hover:border-gray-500 py-1.5 rounded-lg transition">
+                  {{p.status==="active"?"Unpublish":"Publish"}}
+                </button>
+                <button onClick={{()=>remove(p.id)}} className="text-xs text-gray-600 hover:text-red-400 border border-gray-700 px-3 py-1.5 rounded-lg transition">✕</button>
+              </div>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Blog — Posts list ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def blog_posts_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type Status = "published" | "draft";
+interface Post {{ id: string; title: string; excerpt: string; category: string; status: Status; date: string; readTime: number; }}
+const CATS = ["All","Technology","Design","Business","Lifestyle","Tutorial"];
+
+export default function BlogPage() {{
+  const [posts, setPosts] = useState<Post[]>([
+    {{ id: "1", title: "Getting Started with Next.js 14",  excerpt: "A comprehensive guide to building modern web apps with the App Router.",              category: "Technology", status: "published", date: "2025-01-15", readTime: 8  }},
+    {{ id: "2", title: "Design Systems That Scale",        excerpt: "How to build a component library that grows with your product.",                     category: "Design",     status: "published", date: "2025-01-10", readTime: 6  }},
+    {{ id: "3", title: "The Future of AI in Business",    excerpt: "Exploring how artificial intelligence is transforming modern companies.",             category: "Business",   status: "draft",     date: "2025-01-05", readTime: 12 }},
+  ]);
+  const [cat, setCat]       = useState("All");
+  const [form, setForm]     = useState({{ title: "", excerpt: "", category: "Technology" }});
+  const [adding, setAdding] = useState(false);
+
+  const filtered = posts.filter(p => cat === "All" || p.category === cat);
+  const add = () => {{
+    if (!form.title.trim()) return;
+    const words = form.excerpt.split(" ").length;
+    setPosts(p => [...p, {{ ...form, id: Date.now().toString(), status: "draft" as const, date: new Date().toISOString().split("T")[0], readTime: Math.max(1, Math.ceil(words/200)) }}]);
+    setForm({{ title: "", excerpt: "", category: "Technology" }});
+    setAdding(false);
+  }};
+  const toggle = (id: string) => setPosts(p => p.map(post => post.id===id ? {{...post, status: post.status==="published"?"draft":"published"}} : post));
+  const remove = (id: string) => setPosts(p => p.filter(p2 => p2.id !== id));
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">✍️ Blog</h1>
+            <p className="text-gray-400 text-sm mt-1">{{posts.filter(p=>p.status==="published").length}} published · {{posts.filter(p=>p.status==="draft").length}} drafts</p>
+          </div>
+          <button onClick={{()=>setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ New Post</button>
+        </div>
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {{CATS.map(c2 => <button key={{c2}} onClick={{()=>setCat(c2)}} className={{`px-3 py-1.5 rounded-lg text-sm transition ${{cat===c2?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{c2}}</button>)}}
+        </div>
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 space-y-3">
+            <input value={{form.title}} onChange={{e=>setForm(p=>{{...p,title:e.target.value}})}} placeholder="Post title…" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <textarea value={{form.excerpt}} onChange={{e=>setForm(p=>{{...p,excerpt:e.target.value}})}} placeholder="Write your excerpt or content…" rows={{3}} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm resize-none" />
+            <div className="flex gap-3">
+              <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm flex-1">
+                {{CATS.slice(1).map(c2=><option key={{c2}}>{{c2}}</option>)}}
+              </select>
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save Draft</button>
+            </div>
+          </div>
+        )}}
+        <div className="space-y-4">
+          {{filtered.map(post => (
+            <div key={{post.id}} className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-{c}-400 font-medium">{{post.category}}</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-xs text-gray-500">{{post.date}}</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-xs text-gray-500">{{post.readTime}} min read</span>
+                  </div>
+                  <h3 className="font-semibold text-white mb-1">{{post.title}}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{{post.excerpt}}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{post.status==="published"?"bg-green-900/40 text-green-300":"bg-gray-800 text-gray-500"}}`}}>{{post.status}}</span>
+                  <button onClick={{()=>toggle(post.id)}} className="text-xs text-gray-500 hover:text-white border border-gray-700 px-2 py-1 rounded-lg transition">{{post.status==="published"?"Unpublish":"Publish"}}</button>
+                  <button onClick={{()=>remove(post.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
+                </div>
+              </div>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Finance — Transaction tracker ─────────────────────────────────────────
+
+    @staticmethod
+    def finance_tx_page(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type TxType = "income" | "expense";
+interface Tx {{ id: string; title: string; amount: number; type: TxType; category: string; date: string; }}
+const EXP_CATS = ["Food","Transport","Shopping","Bills","Health","Entertainment","Other"];
+const INC_CATS = ["Salary","Freelance","Investment","Gift","Other"];
+
+export default function TransactionsPage() {{
+  const today = new Date().toISOString().split("T")[0];
+  const [txs, setTxs] = useState<Tx[]>([
+    {{ id: "1", title: "Monthly Salary",   amount: 5000,  type: "income",  category: "Salary",        date: "2025-01-01" }},
+    {{ id: "2", title: "Rent",             amount: 1200,  type: "expense", category: "Bills",         date: "2025-01-02" }},
+    {{ id: "3", title: "Groceries",        amount: 86.50, type: "expense", category: "Food",          date: "2025-01-05" }},
+    {{ id: "4", title: "Freelance Work",   amount: 800,   type: "income",  category: "Freelance",     date: "2025-01-08" }},
+    {{ id: "5", title: "Netflix",          amount: 15.99, type: "expense", category: "Entertainment", date: "2025-01-10" }},
+  ]);
+  const [form, setForm] = useState({{ title: "", amount: "", type: "expense" as TxType, category: "Food", date: today }});
+  const [filter, setFilter] = useState<"all"|TxType>("all");
+  const [adding, setAdding] = useState(false);
+
+  const income  = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  const balance = income - expense;
+  const filtered = txs.filter(t=>filter==="all"||t.type===filter).sort((a,b)=>b.date.localeCompare(a.date));
+  const fmt = (n: number) => n.toLocaleString("en", {{ minimumFractionDigits:2, maximumFractionDigits:2 }});
+
+  const add = () => {{
+    if (!form.title.trim() || !form.amount) return;
+    setTxs(p => [...p, {{ ...form, id: Date.now().toString(), amount: Number(form.amount) }}]);
+    setForm({{ title: "", amount: "", type: "expense", category: "Food", date: today }});
+    setAdding(false);
+  }};
+  const remove = (id: string) => setTxs(p => p.filter(t => t.id !== id));
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        <h1 className="text-3xl font-bold mb-6">💳 Transactions</h1>
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {{[
+            {{ label: "Balance",  value: balance,  color: balance>=0?"text-green-400":"text-red-400" }},
+            {{ label: "Income",   value: income,   color: "text-green-400" }},
+            {{ label: "Expenses", value: expense,  color: "text-red-400"   }},
+          ].map(card => (
+            <div key={{card.label}} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+              <p className="text-xs text-gray-500 mb-1">{{card.label}}</p>
+              <p className={{`text-2xl font-bold ${{card.color}}`}}>${{fmt(card.value)}}</p>
+            </div>
+          ))}}
+        </div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-2">
+            {{(["all","income","expense"] as const).map(f => (
+              <button key={{f}} onClick={{()=>setFilter(f)}} className={{`px-3 py-1.5 rounded-lg text-sm capitalize transition ${{filter===f?"bg-{c}-700 text-white":"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{f}}</button>
+            ))}}
+          </div>
+          <button onClick={{()=>setAdding(!adding)}} className="bg-{c}-700 hover:bg-{c}-600 px-4 py-2 rounded-xl text-sm font-medium transition">+ Add</button>
+        </div>
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 grid grid-cols-2 gap-3">
+            <input value={{form.title}} onChange={{e=>setForm(p=>{{...p,title:e.target.value}})}} placeholder="Description" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.amount}} onChange={{e=>setForm(p=>{{...p,amount:e.target.value}})}} placeholder="Amount ($)" type="number" step="0.01" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.date}} onChange={{e=>setForm(p=>{{...p,date:e.target.value}})}} type="date" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <select value={{form.type}} onChange={{e=>setForm(p=>{{...p,type:e.target.value as TxType,category:e.target.value==="income"?"Salary":"Food"}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+              <option value="income">Income</option><option value="expense">Expense</option>
+            </select>
+            <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+              {{(form.type==="income"?INC_CATS:EXP_CATS).map(c2=><option key={{c2}}>{{c2}}</option>)}}
+            </select>
+            <button onClick={{add}} className="col-span-2 bg-{c}-700 hover:bg-{c}-600 py-2 rounded-xl text-sm font-medium">Save</button>
+          </div>
+        )}}
+        <div className="space-y-2">
+          {{filtered.map(tx => (
+            <div key={{tx.id}} className="bg-gray-900 rounded-xl px-4 py-3 border border-gray-800 flex items-center gap-4">
+              <div className={{`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${{tx.type==="income"?"bg-green-900/50 text-green-400":"bg-red-900/50 text-red-400"}}`}}>
+                {{tx.type==="income"?"↑":"↓"}}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">{{tx.title}}</p>
+                <p className="text-gray-500 text-xs">{{tx.category}} · {{tx.date}}</p>
+              </div>
+              <p className={{`font-bold ${{tx.type==="income"?"text-green-400":"text-red-400"}}`}}>{{tx.type==="income"?"+":"-"}}${{tx.amount.toFixed(2)}}</p>
+              <button onClick={{()=>remove(tx.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
 
 # ---------------------------------------------------------------------------
 # Requirement heuristics (no LLM needed)
@@ -1888,6 +2407,7 @@ def _heuristic_requirements(description: str) -> dict:
 
     # --- Platform-specific overrides ---
     app_type = "generic"
+
     if "tiktok" in words or "tik tok" in words:
         app_type = "tiktok_digital_twin"
         color = "rose"
@@ -1912,6 +2432,101 @@ def _heuristic_requirements(description: str) -> dict:
             {"name": "Analytics","slug": "analytics","type": "dashboard",       "description": "Performance analytics"},
         ]
 
+    elif any(w in words for w in ["kanban", "task manager", "task management", "to-do app", "todo app",
+                                   "productivity app", "project management"]):
+        app_type = "task_manager"
+        color = color if color != "blue" else "purple"
+        display_name = display_name or "Task Manager"
+        tagline = "Stay organised — plan, track, and ship with your personal task board"
+        features = [
+            {"name": "Kanban Board",   "desc": "Drag tasks across To Do, In Progress, and Done", "icon": "📋"},
+            {"name": "Priority Levels","desc": "Mark tasks as low, medium, or high priority",    "icon": "🎯"},
+            {"name": "Quick Add",      "desc": "Add tasks in seconds from anywhere in the app",  "icon": "⚡"},
+            {"name": "Progress View",  "desc": "See at a glance how much you have shipped",      "icon": "📊"},
+        ]
+        pages = [
+            {"name": "Board",     "slug": "board",     "type": "kanban",    "description": "Kanban task board"},
+            {"name": "Tasks",     "slug": "tasks",     "type": "list",      "description": "All tasks list"},
+            {"name": "Dashboard", "slug": "dashboard", "type": "dashboard", "description": "Progress overview"},
+            {"name": "Settings",  "slug": "settings",  "type": "form",      "description": "App settings"},
+        ]
+
+    elif any(w in words for w in ["crm", "customer relationship", "lead", "sales pipeline",
+                                   "contact manager", "deal tracker", "sales crm"]):
+        app_type = "crm"
+        color = color if color != "blue" else "blue"
+        display_name = display_name or "CRM"
+        tagline = "Close more deals — manage contacts, track leads, and grow your pipeline"
+        features = [
+            {"name": "Contact Manager", "desc": "Centralise all your leads and customers",        "icon": "👥"},
+            {"name": "Deal Pipeline",   "desc": "Visual Kanban board for every stage of a deal",  "icon": "💼"},
+            {"name": "Status Tracking", "desc": "Move contacts from lead → active → closed",      "icon": "📈"},
+            {"name": "Revenue View",    "desc": "See total closed-won value at a glance",         "icon": "💰"},
+        ]
+        pages = [
+            {"name": "Contacts", "slug": "contacts", "type": "crm_contacts", "description": "Contact list"},
+            {"name": "Pipeline", "slug": "pipeline", "type": "crm_pipeline", "description": "Deal pipeline"},
+            {"name": "Dashboard","slug": "dashboard","type": "dashboard",    "description": "Sales overview"},
+            {"name": "Settings", "slug": "settings", "type": "form",         "description": "CRM settings"},
+        ]
+
+    elif any(w in words for w in ["shop", "store", "ecommerce", "e-commerce", "marketplace",
+                                   "sell products", "online store", "product catalog"]):
+        app_type = "ecommerce"
+        color = color if color != "blue" else "orange"
+        display_name = display_name or "My Store"
+        tagline = "Your products, beautifully presented — manage inventory and track orders"
+        features = [
+            {"name": "Product Catalog", "desc": "Showcase your products with prices and stock",   "icon": "🛍️"},
+            {"name": "Inventory",       "desc": "Track stock levels and get low-stock alerts",    "icon": "📦"},
+            {"name": "Order Manager",   "desc": "View and update every order in one place",       "icon": "📋"},
+            {"name": "Revenue Dash",    "desc": "Monitor sales, revenue, and top products",       "icon": "💰"},
+        ]
+        pages = [
+            {"name": "Products",  "slug": "products",  "type": "ecommerce_products", "description": "Product catalog"},
+            {"name": "Orders",    "slug": "orders",    "type": "list",               "description": "Order list"},
+            {"name": "Dashboard", "slug": "dashboard", "type": "dashboard",          "description": "Sales dashboard"},
+            {"name": "Settings",  "slug": "settings",  "type": "form",               "description": "Store settings"},
+        ]
+
+    elif any(w in words for w in ["blog", "article", "cms", "content management",
+                                   "publish", "newsletter", "writer", "writing app"]):
+        app_type = "blog"
+        color = color if color != "blue" else "teal"
+        display_name = display_name or "My Blog"
+        tagline = "Write, publish, and grow your audience — your content platform"
+        features = [
+            {"name": "Post Editor",    "desc": "Write and save drafts with a clean editor",       "icon": "✍️"},
+            {"name": "Categories",     "desc": "Organise posts by topic for easy discovery",      "icon": "🗂️"},
+            {"name": "Publish Control","desc": "Keep posts as drafts until you are ready",        "icon": "🚦"},
+            {"name": "Read Time",      "desc": "Auto-calculated read time for every post",        "icon": "⏱️"},
+        ]
+        pages = [
+            {"name": "Posts",     "slug": "posts",     "type": "blog_posts", "description": "Blog post list"},
+            {"name": "Dashboard", "slug": "dashboard", "type": "dashboard",  "description": "Blog analytics"},
+            {"name": "About",     "slug": "about",     "type": "info",       "description": "About the blog"},
+            {"name": "Settings",  "slug": "settings",  "type": "form",       "description": "Blog settings"},
+        ]
+
+    elif any(w in words for w in ["finance", "budget", "expense", "money tracker",
+                                   "spending", "income", "wallet", "personal finance"]):
+        app_type = "finance"
+        color = color if color != "blue" else "green"
+        display_name = display_name or "Finance Tracker"
+        tagline = "Know where every dollar goes — track income, expenses, and your balance"
+        features = [
+            {"name": "Transactions",   "desc": "Log every income and expense in seconds",        "icon": "💳"},
+            {"name": "Balance View",   "desc": "Real-time income vs expenses summary",           "icon": "⚖️"},
+            {"name": "Categories",     "desc": "Organise spending by Food, Bills, and more",     "icon": "🗂️"},
+            {"name": "History Filter", "desc": "Filter by income or expense to review any date", "icon": "🔍"},
+        ]
+        pages = [
+            {"name": "Transactions", "slug": "transactions", "type": "finance_tx",  "description": "Transaction log"},
+            {"name": "Dashboard",    "slug": "dashboard",    "type": "dashboard",   "description": "Finance overview"},
+            {"name": "Budget",       "slug": "budget",       "type": "info",        "description": "Budget planner"},
+            {"name": "Settings",     "slug": "settings",     "type": "form",        "description": "Finance settings"},
+        ]
+
     return {
         "app_name":     app_name,
         "display_name": display_name,
@@ -1930,14 +2545,27 @@ def _heuristic_requirements(description: str) -> dict:
 def _detect_page_type(name: str, desc: str, features: list) -> str:
     """Guess page type from name, description, and app features."""
     combined = (name + " " + desc).lower()
-    feat_text = " ".join(f.get("name", "") + " " + f.get("desc", "") for f in features).lower()
 
+    # Purpose-built types take priority
+    if any(w in combined for w in ["kanban", "board"]):
+        return "kanban"
+    if any(w in combined for w in ["pipeline", "deal"]):
+        return "crm_pipeline"
+    if any(w in combined for w in ["contact", "lead", "crm"]):
+        return "crm_contacts"
+    if any(w in combined for w in ["product", "catalog", "inventory", "shop", "store"]):
+        return "ecommerce_products"
+    if any(w in combined for w in ["post", "article", "blog", "publish"]):
+        return "blog_posts"
+    if any(w in combined for w in ["transaction", "expense", "income", "spending", "finance"]):
+        return "finance_tx"
+    # Generic types
     if any(w in combined for w in ["dashboard", "analytics", "metric", "stats", "report", "overview"]):
         return "dashboard"
-    if any(w in combined for w in ["contact", "send", "message", "form", "submit", "feedback"]):
+    if any(w in combined for w in ["send", "message", "form", "submit", "feedback", "setting", "profile"]):
         return "form"
     if any(w in combined for w in ["list", "task", "todo", "note", "item", "manage", "crud",
-                                    "add", "delete", "edit", "create", "track"]):
+                                    "add", "delete", "edit", "create", "track", "order"]):
         return "list"
     return "info"
 
@@ -2364,6 +2992,24 @@ RULES:
 
             elif ptype == "tiktok_library":
                 content = _T.tiktok_library_page()
+
+            elif ptype == "kanban":
+                content = _T.kanban_page(color)
+
+            elif ptype == "crm_contacts":
+                content = _T.crm_contacts_page(color)
+
+            elif ptype == "crm_pipeline":
+                content = _T.crm_pipeline_page(color)
+
+            elif ptype == "ecommerce_products":
+                content = _T.ecommerce_products_page(color)
+
+            elif ptype == "blog_posts":
+                content = _T.blog_posts_page(color)
+
+            elif ptype == "finance_tx":
+                content = _T.finance_tx_page(color)
 
             elif ptype == "list":
                 # Derive model name (singular, CamelCase) and camelCase var
