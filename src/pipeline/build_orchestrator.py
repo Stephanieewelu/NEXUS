@@ -1036,6 +1036,764 @@ export default function {comp}Page() {{
 }}
 """
 
+    # ── Prisma DB client singleton ─────────────────────────────────────────────
+
+    @staticmethod
+    def db_client() -> str:
+        return '''import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["error"] : [] });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+'''
+
+    # ── Prisma schema (generated from pages) ──────────────────────────────────
+
+    @staticmethod
+    def prisma_schema(pages: list) -> str:
+        header = (
+            'datasource db {\n  provider = "sqlite"\n  url      = env("DATABASE_URL")\n}\n\n'
+            'generator client {\n  provider = "prisma-client-js"\n}\n\n'
+        )
+        models: list = []
+        seen: set = set()
+        for page in pages:
+            ptype = page.get("type", "")
+            name  = page.get("name", "Item")
+            if ptype == "list":
+                raw = name.rstrip("s") if name.lower().endswith("s") else name
+                model = "".join(w.capitalize() for w in re.split(r"[-_ ]+", raw) if w)
+                if model in seen:
+                    continue
+                seen.add(model)
+                models.append(
+                    f"model {model} {{\n"
+                    f"  id        String   @id @default(cuid())\n"
+                    f"  title     String\n"
+                    f"  completed Boolean  @default(false)\n"
+                    f"  createdAt DateTime @default(now())\n"
+                    f"  updatedAt DateTime @updatedAt\n}}\n"
+                )
+            elif ptype == "tiktok_library":
+                if "Content" not in seen:
+                    seen.add("Content")
+                    seen.add("Settings")
+                    models.append(
+                        "model Content {\n"
+                        "  id        String   @id @default(cuid())\n"
+                        "  hook      String\n"
+                        "  script    String\n"
+                        "  hashtags  String\n"
+                        "  caption   String\n"
+                        "  topic     String\n"
+                        "  format    String\n"
+                        "  niche     String\n"
+                        "  tone      String\n"
+                        "  handle    String\n"
+                        "  createdAt DateTime @default(now())\n"
+                        "}\n\n"
+                        "model Settings {\n"
+                        "  id     String @id @default(\"user\")\n"
+                        "  handle String @default(\"@mydigitaltwin\")\n"
+                        "  niche  String @default(\"Education\")\n"
+                        "  tone   String @default(\"Casual\")\n"
+                        "}\n"
+                    )
+        if not models:
+            models.append(
+                "model Item {\n"
+                "  id        String   @id @default(cuid())\n"
+                "  title     String\n"
+                "  completed Boolean  @default(false)\n"
+                "  createdAt DateTime @default(now())\n"
+                "  updatedAt DateTime @updatedAt\n}\n"
+            )
+        return header + "\n".join(models)
+
+    # ── API route: list + create ───────────────────────────────────────────────
+
+    @staticmethod
+    def api_list_route(model_var: str) -> str:
+        return f'''import {{ NextResponse }} from "next/server";
+import {{ prisma }} from "@/lib/db";
+
+export async function GET() {{
+  try {{
+    const items = await (prisma as any)["{model_var}"].findMany({{ orderBy: {{ createdAt: "desc" }} }});
+    return NextResponse.json(items);
+  }} catch (e) {{
+    return NextResponse.json({{ error: String(e) }}, {{ status: 500 }});
+  }}
+}}
+
+export async function POST(req: Request) {{
+  try {{
+    const body = await req.json();
+    if (!body.title?.trim()) return NextResponse.json({{ error: "Title required" }}, {{ status: 400 }});
+    const item = await (prisma as any)["{model_var}"].create({{ data: {{ title: body.title.trim() }} }});
+    return NextResponse.json(item, {{ status: 201 }});
+  }} catch (e) {{
+    return NextResponse.json({{ error: String(e) }}, {{ status: 500 }});
+  }}
+}}
+'''
+
+    # ── API route: update + delete individual item ─────────────────────────────
+
+    @staticmethod
+    def api_item_route(model_var: str) -> str:
+        return f'''import {{ NextResponse }} from "next/server";
+import {{ prisma }} from "@/lib/db";
+
+export async function PATCH(
+  req: Request,
+  {{ params }}: {{ params: {{ id: string }} }}
+) {{
+  try {{
+    const data = await req.json();
+    const item = await (prisma as any)["{model_var}"].update({{ where: {{ id: params.id }}, data }});
+    return NextResponse.json(item);
+  }} catch (e) {{
+    return NextResponse.json({{ error: String(e) }}, {{ status: 500 }});
+  }}
+}}
+
+export async function DELETE(
+  _: Request,
+  {{ params }}: {{ params: {{ id: string }} }}
+) {{
+  try {{
+    await (prisma as any)["{model_var}"].delete({{ where: {{ id: params.id }} }});
+    return NextResponse.json({{ ok: true }});
+  }} catch (e) {{
+    return NextResponse.json({{ error: String(e) }}, {{ status: 500 }});
+  }}
+}}
+'''
+
+    # ── API route: TikTok content (list + save) ────────────────────────────────
+
+    @staticmethod
+    def tiktok_content_api() -> str:
+        return '''import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+export async function GET() {
+  try {
+    const items = await prisma.content.findMany({ orderBy: { createdAt: "desc" } });
+    return NextResponse.json(items);
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const item = await prisma.content.create({
+      data: {
+        hook:     body.hook     ?? "",
+        script:   body.script   ?? "",
+        hashtags: JSON.stringify(body.hashtags ?? []),
+        caption:  body.caption  ?? "",
+        topic:    body.topic    ?? "",
+        format:   body.format   ?? "",
+        niche:    body.niche    ?? "",
+        tone:     body.tone     ?? "",
+        handle:   body.handle   ?? "",
+      },
+    });
+    return NextResponse.json(item, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+'''
+
+    # ── API route: TikTok content [id] (delete) ────────────────────────────────
+
+    @staticmethod
+    def tiktok_content_id_api() -> str:
+        return '''import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+export async function DELETE(
+  _: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await prisma.content.delete({ where: { id: params.id } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+'''
+
+    # ── API route: TikTok settings ─────────────────────────────────────────────
+
+    @staticmethod
+    def tiktok_settings_api() -> str:
+        return '''import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+export async function GET() {
+  try {
+    let s = await prisma.settings.findUnique({ where: { id: "user" } });
+    if (!s) {
+      s = await prisma.settings.create({
+        data: { id: "user", handle: "@mydigitaltwin", niche: "Education", tone: "Casual" },
+      });
+    }
+    return NextResponse.json(s);
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const data = await req.json();
+    const s = await prisma.settings.upsert({
+      where:  { id: "user" },
+      create: { id: "user", ...data },
+      update: data,
+    });
+    return NextResponse.json(s);
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+'''
+
+    # ── Full-stack CRUD page (fetches from API, persists to DB) ───────────────
+
+    @staticmethod
+    def crud_page_fullstack(page_name: str, slug: str, color: str) -> str:
+        c       = _col(color)[0]
+        comp    = "".join(w.capitalize() for w in re.split(r"[-_ ]+", page_name) if w)
+        entity  = page_name.rstrip("s") if page_name.lower().endswith("s") else page_name
+        safe    = page_name.replace('"', '\\"')
+        api     = f"/api/{slug}"
+
+        return f'''"use client";
+import {{ useState, useEffect }} from "react";
+
+interface {comp}Item {{
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: string;
+}}
+
+type Filter = "all" | "active" | "done";
+
+export default function {comp}Page() {{
+  const [items,  setItems]  = useState<{comp}Item[]>([]);
+  const [input,  setInput]  = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+
+  useEffect(() => {{
+    fetch("{api}")
+      .then((r) => r.json())
+      .then((data) => {{ setItems(Array.isArray(data) ? data : []); setLoading(false); }})
+      .catch(() => setLoading(false));
+  }}, []);
+
+  const add = async () => {{
+    if (!input.trim() || saving) return;
+    setSaving(true);
+    const res = await fetch("{api}", {{
+      method:  "POST",
+      headers: {{ "Content-Type": "application/json" }},
+      body:    JSON.stringify({{ title: input.trim() }}),
+    }});
+    if (res.ok) {{ setItems((prev) => [await res.clone().json(), ...prev]); setInput(""); }}
+    setSaving(false);
+  }};
+
+  const toggle = async (id: string, completed: boolean) => {{
+    setItems((prev) => prev.map((i) => (i.id === id ? {{ ...i, completed: !completed }} : i)));
+    await fetch(`{api}/${{id}}`, {{
+      method:  "PATCH",
+      headers: {{ "Content-Type": "application/json" }},
+      body:    JSON.stringify({{ completed: !completed }}),
+    }});
+  }};
+
+  const remove = async (id: string) => {{
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    await fetch(`{api}/${{id}}`, {{ method: "DELETE" }});
+  }};
+
+  const filtered  = items.filter((i) => filter === "all" ? true : filter === "done" ? i.completed : !i.completed);
+  const remaining = items.filter((i) => !i.completed).length;
+
+  return (
+    <main className="max-w-2xl mx-auto px-4 py-10">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">{safe}</h1>
+        <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+          {{remaining}} remaining
+        </span>
+      </div>
+
+      <div className="flex gap-2 mb-6">
+        <input
+          type="text"
+          value={{input}}
+          onChange={{(e) => setInput(e.target.value)}}
+          onKeyDown={{(e) => e.key === "Enter" && add()}}
+          placeholder="Add a new {entity.lower()}..."
+          className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-{c}-500 bg-white"
+        />
+        <button
+          onClick={{add}}
+          disabled={{!input.trim() || saving}}
+          className="px-5 py-2.5 bg-{c}-600 text-white rounded-xl hover:bg-{c}-700 transition font-medium disabled:opacity-50"
+        >
+          {{saving ? "…" : "Add"}}
+        </button>
+      </div>
+
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-6">
+        {{(["all", "active", "done"] as Filter[]).map((f) => (
+          <button
+            key={{f}}
+            onClick={{() => setFilter(f)}}
+            className={{`flex-1 py-1.5 rounded-lg text-sm font-medium transition capitalize ${{
+              filter === f ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+            }}`}}
+          >{{f}}</button>
+        ))}}
+      </div>
+
+      {{loading ? (
+        <div className="text-center py-16 text-gray-400">Loading…</div>
+      ) : (
+        <ul className="space-y-2">
+          {{filtered.length === 0 && (
+            <li className="text-center text-gray-400 py-12 bg-white rounded-2xl border border-dashed border-gray-200">
+              No items yet. Add your first one above!
+            </li>
+          )}}
+          {{filtered.map((item) => (
+            <li key={{item.id}} className="flex items-center gap-3 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-200 group transition">
+              <input
+                type="checkbox"
+                checked={{item.completed}}
+                onChange={{() => toggle(item.id, item.completed)}}
+                className="w-5 h-5 accent-{c}-600 cursor-pointer flex-shrink-0"
+              />
+              <span className={{`flex-1 ${{item.completed ? "line-through text-gray-400" : "text-gray-800"}}`}}>
+                {{item.title}}
+              </span>
+              <span className="text-xs text-gray-300 hidden group-hover:block mr-2">
+                {{new Date(item.createdAt).toLocaleDateString()}}
+              </span>
+              <button onClick={{() => remove(item.id)}} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition p-1" aria-label="Delete">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={{2}} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </li>
+          ))}}
+        </ul>
+      )}}
+
+      {{items.length > 0 && !loading && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={{async () => {{
+              const done = items.filter((i) => i.completed);
+              await Promise.all(done.map((i) => fetch(`{api}/${{i.id}}`, {{ method: "DELETE" }})));
+              setItems((prev) => prev.filter((i) => !i.completed));
+            }}}}
+            className="text-sm text-gray-400 hover:text-red-500 transition"
+          >Clear completed</button>
+        </div>
+      )}}
+    </main>
+  );
+}}
+'''
+
+    # ── TikTok generate page — with Save to Library ────────────────────────────
+
+    @staticmethod
+    def tiktok_generate_page_fullstack() -> str:
+        return '''"use client";
+import { useState } from "react";
+
+interface Persona { handle: string; niche: string; tone: string; }
+interface GeneratedContent { hook: string; script: string; hashtags: string[]; caption: string; }
+
+const NICHES   = ["Comedy","Fashion","Food","Finance","Fitness","Education","Gaming","Beauty","Travel","Motivation"];
+const TONES    = ["Funny","Casual","Educational","Inspirational","Storytelling","POV","Trendy"];
+const FORMATS  = ["Tutorial","Storytime","POV","Tips","Day in My Life","Skit","Reaction"];
+const DURATIONS = ["15s","30s","60s","3min"];
+
+function buildContent(topic: string, persona: Persona, format: string, duration: string): GeneratedContent {
+  const t     = topic.trim() || "my content";
+  const tSlug = t.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const hooks: Record<string,string> = {
+    Tutorial:        `POV: You\u2019ve been doing ${t} wrong this whole time \ud83d\ude24`,
+    Storytime:       `The ${t} situation nobody warned me about... \ud83d\udc40`,
+    POV:             `POV: You finally understand ${t} \u2728`,
+    Tips:            `5 things about ${t} that changed my life \ud83e\udd2f`,
+    "Day in My Life":`Come experience ${t} with me today \ud83d\udcf1`,
+    Skit:            `Me before ${t} vs. after \ud83d\udc80`,
+    Reaction:        `Everyone\u2019s obsessed with ${t} \u2014 here\u2019s the truth \ud83d\udc40`,
+  };
+  const bodies: Record<string,string> = {
+    Tutorial:        `Step 1: [Most surprising fact about ${t}]\nStep 2: [The wrong way most people do it]\nStep 3: [The right way \u2014 keep it visual]\nStep 4: [Quick result or transformation]`,
+    Storytime:       `[Set the scene \u2014 where were you?]\n[What happened with ${t}]\n[The turning point \u2014 make them lean in]\n[The resolution / lesson learned]`,
+    POV:             `[Put the viewer in the moment with ${t}]\n[Build tension or curiosity in 5s]\n[The reveal or payoff]\n[Relatable reaction shot]`,
+    Tips:            `Tip 1: [Quick, specific ${t} tip]\nTip 2: [Something counterintuitive]\nTip 3: [The one they screenshot]\nTip 4: [Advanced move]\nTip 5: [The share-worthy closer]`,
+    "Day in My Life": `[Morning \u2014 your ${t} routine]\n[Midday \u2014 real moment or challenge]\n[Evening \u2014 reflection or win]\n[Outro \u2014 call viewer to action]`,
+    Skit:            `[Setup: exaggerate the old way]\n[Transition: "and then I discovered..."]\n[Payoff: show the better way]\n[Outro: quick reaction shot]`,
+    Reaction:        `[Show the ${t} trend or clip]\n[Your genuine first reaction]\n[Break down why it works / doesn\u2019t]\n[Your hot take / verdict]`,
+  };
+  const ctas: Record<string,string> = {
+    Funny:          `Drop a \ud83d\ude02 if you felt that! Follow ${persona.handle} for more`,
+    Casual:         `Save this! Follow ${persona.handle} for the good stuff \ud83d\udcaf`,
+    Educational:    `Follow ${persona.handle} for more tips like this \ud83e\udde0`,
+    Inspirational:  `Share with someone who needs this \ud83d\ude4c`,
+    Storytelling:   `Follow ${persona.handle} \u2014 this is only part 1 \ud83d\udc40`,
+    POV:            `Comment if you relate! Follow for more POVs \ud83d\udcf1`,
+    Trendy:         `Duet this & tag me! ${persona.handle} \ud83d\udd25`,
+  };
+  const nicheHtags: Record<string,string[]> = {
+    Comedy:["#funny","#comedy","#relatable","#lol"],Fashion:["#fashion","#ootd","#style","#outfitinspo"],
+    Food:["#foodtok","#recipe","#cooking","#foodie"],Finance:["#moneytok","#finance","#investing","#money"],
+    Fitness:["#fitnessmotivation","#workout","#gym","#health"],Education:["#learnontiktok","#didyouknow","#education","#facts"],
+    Gaming:["#gaming","#gamer","#videogames","#gamertok"],Beauty:["#beauty","#makeup","#skincare","#beautytips"],
+    Travel:["#travel","#wanderlust","#traveltok","#adventure"],Motivation:["#motivation","#mindset","#success","#inspiration"],
+  };
+  const hook     = hooks[format]      ?? `${t} is changing everything \ud83d\udd25`;
+  const body     = bodies[format]     ?? `[${duration} of ${persona.niche} content about ${t} \u2014 ${persona.tone} tone]`;
+  const cta      = ctas[persona.tone] ?? `Follow ${persona.handle} for more \ud83d\udd14`;
+  const nHtags   = nicheHtags[persona.niche] ?? ["#foryoupage","#viral","#trending"];
+  const hashtags = ["#fyp","#foryoupage",...nHtags.slice(0,3),`#${tSlug||"tiktok"}`].slice(0,7);
+  const caption  = `${hook}\n\n${hashtags.join(" ")}`;
+  const script   = `\ud83c\udfa5 HOOK (first 3s):\n"${hook}"\n\n\ud83d\udcdd BODY (${duration}):\n${body}\n\n\ud83c\udfaf CTA:\n"${cta}"`;
+  return { hook, script, hashtags, caption };
+}
+
+export default function GeneratePage() {
+  const [persona,  setPersona]  = useState<Persona>({ handle: "@mydigitaltwin", niche: "Education", tone: "Casual" });
+  const [topic,    setTopic]    = useState("");
+  const [format,   setFormat]   = useState("Tutorial");
+  const [duration, setDuration] = useState("30s");
+  const [result,   setResult]   = useState<GeneratedContent | null>(null);
+  const [copied,   setCopied]   = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+
+  const handleGenerate = () => {
+    if (!topic.trim()) return;
+    setLoading(true);
+    setSavedMsg("");
+    setTimeout(() => { setResult(buildContent(topic, persona, format, duration)); setLoading(false); }, 800);
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/content", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...result,
+          topic,
+          format,
+          niche:  persona.niche,
+          tone:   persona.tone,
+          handle: persona.handle,
+        }),
+      });
+      setSavedMsg(res.ok ? "Saved to Library!" : "Save failed.");
+    } catch { setSavedMsg("Save failed."); }
+    setSaving(false);
+    setTimeout(() => setSavedMsg(""), 3000);
+  };
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold mb-2">Content <span className="text-rose-500">Generator</span></h1>
+          <p className="text-gray-400">Create viral TikTok scripts, captions &amp; hashtags in your twin&apos;s voice</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Twin persona sidebar */}
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+            <h2 className="text-lg font-semibold mb-4">\ud83d\udc64 Your Twin</h2>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 mb-1 block">Handle</label>
+              <input value={persona.handle} onChange={(e) => setPersona({ ...persona, handle: e.target.value })}
+                placeholder="@yourhandle"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+            </div>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 mb-2 block">Niche</label>
+              <div className="flex flex-wrap gap-1.5">
+                {NICHES.map((n) => (
+                  <button key={n} onClick={() => setPersona({ ...persona, niche: n })}
+                    className={`text-xs px-2.5 py-1 rounded-full transition ${persona.niche === n ? "bg-rose-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  >{n}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-2 block">Tone</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TONES.map((t) => (
+                  <button key={t} onClick={() => setPersona({ ...persona, tone: t })}
+                    className={`text-xs px-2.5 py-1 rounded-full transition ${persona.tone === t ? "bg-rose-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Generator + results */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+              <h2 className="text-lg font-semibold mb-4">\ud83c\udfa5 Create Content</h2>
+              <div className="mb-4">
+                <label className="text-xs text-gray-400 mb-1 block">Topic or Idea</label>
+                <input value={topic} onChange={(e) => setTopic(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                  placeholder="e.g. morning routines, investing basics, easy recipes..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Format</label>
+                  <select value={format} onChange={(e) => setFormat(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    {FORMATS.map((f) => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Duration</label>
+                  <select value={duration} onChange={(e) => setDuration(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    {DURATIONS.map((d) => <option key={d}>{d}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleGenerate} disabled={!topic.trim() || loading}
+                className="w-full bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition">
+                {loading ? "\u2728 Generating as your Twin\u2026" : "\u2728 Generate as My Digital Twin"}
+              </button>
+            </div>
+
+            {result && (
+              <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">\ud83d\udce4 Your Content</h2>
+                  <div className="flex items-center gap-3">
+                    {savedMsg && <span className="text-xs text-green-400">{savedMsg}</span>}
+                    <button onClick={handleSave} disabled={saving}
+                      className="text-xs bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition">
+                      {saving ? "Saving\u2026" : "\ud83d\udcbe Save to Library"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Script</span>
+                    <button onClick={() => copy(result.script, "script")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "script" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                    </button>
+                  </div>
+                  <pre className="text-sm whitespace-pre-wrap text-gray-200 font-sans leading-relaxed">{result.script}</pre>
+                </div>
+
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Hashtags</span>
+                    <button onClick={() => copy(result.hashtags.join(" "), "tags")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "tags" ? "\u2705 Copied!" : "\ud83d\udccb Copy All"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {result.hashtags.map((tag) => (
+                      <span key={tag} className="bg-rose-900/40 text-rose-300 text-xs px-2.5 py-1 rounded-full border border-rose-800/50">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Caption</span>
+                    <button onClick={() => copy(result.caption, "caption")} className="text-xs text-rose-400 hover:text-rose-300 transition">
+                      {copied === "caption" ? "\u2705 Copied!" : "\ud83d\udccb Copy"}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{result.caption}</p>
+                </div>
+
+                <button onClick={handleGenerate} className="w-full border border-rose-700 text-rose-400 hover:bg-rose-950 font-medium py-2.5 rounded-xl transition text-sm">
+                  \ud83d\udd04 Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+'''
+
+    # ── TikTok library page — reads saved content from DB ─────────────────────
+
+    @staticmethod
+    def tiktok_library_page() -> str:
+        return '''"use client";
+import { useState, useEffect } from "react";
+
+interface ContentItem {
+  id: string;
+  hook: string;
+  script: string;
+  hashtags: string;
+  caption: string;
+  topic: string;
+  format: string;
+  niche: string;
+  tone: string;
+  handle: string;
+  createdAt: string;
+}
+
+export default function LibraryPage() {
+  const [items,   setItems]   = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copied,  setCopied]  = useState<string | null>(null);
+  const [search,  setSearch]  = useState("");
+
+  useEffect(() => {
+    fetch("/api/content")
+      .then((r) => r.json())
+      .then((data) => { setItems(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const remove = async (id: string) => {
+    await fetch(`/api/content/${id}`, { method: "DELETE" });
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const tryParseHashtags = (raw: string): string[] => {
+    try { return JSON.parse(raw); } catch { return raw.split(" ").filter(Boolean); }
+  };
+
+  const filtered = items.filter((i) =>
+    search === "" ||
+    i.topic.toLowerCase().includes(search.toLowerCase()) ||
+    i.niche.toLowerCase().includes(search.toLowerCase()) ||
+    i.hook.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">\ud83d\udcda Content Library</h1>
+            <p className="text-gray-400 text-sm mt-1">{items.length} saved piece{items.length !== 1 ? "s" : ""}</p>
+          </div>
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="\ud83d\udd0d Search by topic, niche..."
+            className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 w-48" />
+        </div>
+
+        {loading ? (
+          <div className="text-center py-20 text-gray-500">Loading your library\u2026</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-5xl mb-4">{search ? "\ud83d\udd0d" : "\ud83d\udcf9"}</p>
+            <p className="text-gray-400 text-lg">{search ? "No results found." : "No saved content yet."}</p>
+            <p className="text-gray-600 text-sm mt-2">{!search && "Generate content and hit \u201cSave to Library\u201d to see it here."}</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map((item) => {
+              const tags = tryParseHashtags(item.hashtags);
+              return (
+                <div key={item.id} className="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <span className="text-xs text-rose-400 font-medium uppercase tracking-wider">{item.niche} \u00b7 {item.format}</span>
+                      <h3 className="text-white font-semibold mt-0.5">{item.topic}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                      <button onClick={() => remove(item.id)}
+                        className="text-gray-600 hover:text-red-500 transition p-1" aria-label="Delete">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-gray-300 text-sm leading-relaxed mb-3 italic">&ldquo;{item.hook}&rdquo;</p>
+
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {tags.map((tag) => (
+                      <span key={tag} className="bg-rose-900/30 text-rose-300 text-xs px-2 py-0.5 rounded-full border border-rose-800/40">{tag}</span>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => copy(item.script, `script-${item.id}`)}
+                      className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition">
+                      {copied === `script-${item.id}` ? "\u2705 Copied!" : "\ud83d\udccb Copy Script"}
+                    </button>
+                    <button onClick={() => copy(item.caption, `caption-${item.id}`)}
+                      className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition">
+                      {copied === `caption-${item.id}` ? "\u2705 Copied!" : "\ud83d\udccb Copy Caption"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+'''
+
 
 # ---------------------------------------------------------------------------
 # Requirement heuristics (no LLM needed)
@@ -1150,7 +1908,7 @@ def _heuristic_requirements(description: str) -> dict:
         pages = [
             {"name": "Generate", "slug": "generate", "type": "tiktok_generate", "description": "AI content generator"},
             {"name": "My Twin",  "slug": "twin",     "type": "info",            "description": "Digital twin settings"},
-            {"name": "Library",  "slug": "library",  "type": "list",            "description": "Saved content library"},
+            {"name": "Library",  "slug": "library",  "type": "tiktok_library",  "description": "Saved content library"},
             {"name": "Analytics","slug": "analytics","type": "dashboard",       "description": "Performance analytics"},
         ]
 
@@ -1389,11 +2147,11 @@ RULES:
             "framework": "next.js",
             "language":  "typescript",
             "styling":   "tailwindcss",
-            "database":  "none",
+            "database":  "prisma-sqlite",
             "build_dir": ".",
         }
         self.project["tech"] = tech
-        print("   ✅ Next.js 14 + TypeScript + Tailwind CSS")
+        print("   ✅ Next.js 14 + TypeScript + Tailwind CSS + Prisma SQLite")
         return tech
 
     # ------------------------------------------------------------------
@@ -1438,18 +2196,20 @@ RULES:
             "version": "0.1.0",
             "private": True,
             "scripts": {
-                "dev":   "next dev",
-                "build": "next build",
-                "start": "next start",
-                "lint":  "next lint",
+                "dev":         "next dev",
+                "build":       "next build",
+                "start":       "next start",
+                "lint":        "next lint",
+                "postinstall": "prisma generate",
             },
             "dependencies": {
-                "next":           "^14.2.5",
-                "react":          "^18.3.1",
-                "react-dom":      "^18.3.1",
-                "clsx":           "^2.1.1",
-                "lucide-react":   "^0.400.0",
-                "tailwind-merge": "^2.4.0",
+                "next":            "^14.2.5",
+                "react":           "^18.3.1",
+                "react-dom":       "^18.3.1",
+                "@prisma/client":  "^5.16.0",
+                "clsx":            "^2.1.1",
+                "lucide-react":    "^0.400.0",
+                "tailwind-merge":  "^2.4.0",
             },
             "devDependencies": {
                 "@types/node":     "^20",
@@ -1459,6 +2219,7 @@ RULES:
                 "tailwindcss":     "^3.4.7",
                 "postcss":         "^8.4.41",
                 "autoprefixer":    "^10.4.19",
+                "prisma":          "^5.16.0",
             },
         }
         self.fs.write_file(os.path.join(project_path, "package.json"), json.dumps(pkg, indent=2))
@@ -1517,19 +2278,37 @@ RULES:
             "const nextConfig = {};\nexport default nextConfig;\n",
         )
 
-        for sub in ["src", "src/app", "src/components", "src/lib", "public"]:
+        for sub in ["src", "src/app", "src/components", "src/lib", "public", "prisma"]:
             self.fs.create_directory(os.path.join(project_path, sub))
+
+        # Write prisma schema (placeholder — real schema written in Phase 5 after pages are known)
+        self.fs.write_file(
+            os.path.join(project_path, "prisma", "schema.prisma"),
+            'datasource db {\n  provider = "sqlite"\n  url      = env("DATABASE_URL")\n}\n\n'
+            'generator client {\n  provider = "prisma-client-js"\n}\n\n'
+            'model Item {\n  id        String   @id @default(cuid())\n'
+            '  title     String\n  completed Boolean  @default(false)\n'
+            '  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n',
+        )
+        self.fs.write_file(
+            os.path.join(project_path, ".env"),
+            'DATABASE_URL="file:./dev.db"\n',
+        )
 
         print("   📦 Installing dependencies…")
         _, stderr, code = self.terminal.run("npm install", cwd=project_path, timeout=240)
         print(f"   {'✅' if code == 0 else '⚠️ '} npm install {'OK' if code == 0 else stderr[:120]}")
+
+        # Push initial placeholder schema so Prisma client exists
+        _, _, pc = self.terminal.run("npx prisma db push --accept-data-loss", cwd=project_path, timeout=120)
+        print(f"   {'✅' if pc == 0 else '⚠️ '} Prisma DB initialised")
 
     # ------------------------------------------------------------------
     # Phase 5  -  Template generation (0 LLM calls)
     # ------------------------------------------------------------------
 
     def _phase_implement(self, project_path: str, reqs: dict, arch: dict, tech: dict):
-        print("\n💻 Phase 5: Generating app from templates (0 LLM calls)…")
+        print("\n💻 Phase 5: Generating full-stack app from templates (0 LLM calls)…")
 
         display  = reqs.get("display_name", "My App")
         tagline  = reqs.get("tagline", f"The best {display} experience")
@@ -1537,16 +2316,41 @@ RULES:
         color    = reqs.get("color", "blue")
         features = reqs.get("features", [])
         pages    = reqs.get("pages", [])
+        app_type = reqs.get("app_type", "generic")
+
+        # ------------------------------------------------------------------
+        # Write real Prisma schema (now that we know the pages)
+        # ------------------------------------------------------------------
+        schema_content = _T.prisma_schema(pages)
+        schema_path = os.path.join(project_path, "prisma", "schema.prisma")
+        os.makedirs(os.path.dirname(schema_path), exist_ok=True)
+        self.fs.write_file(schema_path, schema_content)
+        print("   📝 prisma/schema.prisma (full schema)")
+
+        # Apply schema to DB
+        _, _, pc = self.terminal.run("npx prisma db push --accept-data-loss", cwd=project_path, timeout=120)
+        print(f"   {'✅' if pc == 0 else '⚠️ '} Prisma schema pushed to SQLite")
 
         # Core files every Next.js 14 app needs
         files: Dict[str, str] = {
-            "src/app/globals.css": _T.globals_css(color),
-            "src/app/layout.tsx":  _T.layout(display, summary),
-            "src/app/page.tsx":    _T.home_page(display, tagline, summary, features, pages, color),
+            "src/app/globals.css":       _T.globals_css(color),
+            "src/app/layout.tsx":        _T.layout(display, summary),
+            "src/app/page.tsx":          _T.home_page(display, tagline, summary, features, pages, color),
             "src/components/Navbar.tsx": _T.navbar(display, pages, color),
+            "src/lib/db.ts":             _T.db_client(),
         }
 
+        # ------------------------------------------------------------------
+        # TikTok-specific API routes (content + settings)
+        # ------------------------------------------------------------------
+        if app_type == "tiktok_digital_twin":
+            files["src/app/api/content/route.ts"]        = _T.tiktok_content_api()
+            files["src/app/api/content/[id]/route.ts"]   = _T.tiktok_content_id_api()
+            files["src/app/api/settings/route.ts"]       = _T.tiktok_settings_api()
+
+        # ------------------------------------------------------------------
         # Generate one page per entry in pages
+        # ------------------------------------------------------------------
         for page in pages[:4]:
             slug = page.get("slug", "").strip().strip("/")
             if not slug:
@@ -1556,9 +2360,27 @@ RULES:
             ptype = page.get("type", "") or _detect_page_type(name, desc, features)
 
             if ptype == "tiktok_generate":
-                content = _T.tiktok_generate_page()
+                content = _T.tiktok_generate_page_fullstack()
+
+            elif ptype == "tiktok_library":
+                content = _T.tiktok_library_page()
+
             elif ptype == "list":
-                content = _T.crud_page(name, slug, color)
+                # Derive model name (singular, CamelCase) and camelCase var
+                raw   = name.rstrip("s") if name.lower().endswith("s") else name
+                model = "".join(w.capitalize() for w in re.split(r"[-_ ]+", raw) if w)
+                var   = model[0].lower() + model[1:]
+                # Generate API routes for this list
+                api_dir = os.path.join(project_path, "src", "app", "api", slug)
+                api_id_dir = os.path.join(api_dir, "[id]")
+                os.makedirs(api_dir, exist_ok=True)
+                os.makedirs(api_id_dir, exist_ok=True)
+                self.fs.write_file(os.path.join(api_dir, "route.ts"),    _T.api_list_route(var))
+                self.fs.write_file(os.path.join(api_id_dir, "route.ts"), _T.api_item_route(var))
+                print(f"   📝 src/app/api/{slug}/route.ts")
+                print(f"   📝 src/app/api/{slug}/[id]/route.ts")
+                content = _T.crud_page_fullstack(name, slug, color)
+
             elif ptype == "dashboard":
                 content = _T.dashboard_page(name, color)
             elif ptype == "form":
@@ -1573,14 +2395,13 @@ RULES:
         # Write all files
         for rel_path, content in files.items():
             full = os.path.join(project_path, rel_path)
-            # Ensure parent dir exists
             os.makedirs(os.path.dirname(full), exist_ok=True)
             if self.fs.write_file(full, content):
                 self.generated_files[rel_path] = content
                 print(f"   📝 {rel_path}")
 
-        self.git.commit(project_path, "Template-based implementation by NEXUS")
-        print(f"\n   ✅ {len(files)} files generated (0 LLM calls used)")
+        self.git.commit(project_path, "Full-stack implementation by NEXUS (Prisma + API routes)")
+        print(f"\n   ✅ {len(files)} files generated (database + API routes + frontend)")
 
     # ------------------------------------------------------------------
     # Phase 6  -  Test (run npm build)
