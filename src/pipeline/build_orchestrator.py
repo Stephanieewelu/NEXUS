@@ -812,7 +812,7 @@ export default function {comp}Page() {{
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{safe_name}</h1>
           <p className="text-gray-500 mt-1">
-            {{new Date().toLocaleDateString("en-US", {{ weekday: "long", year: "numeric", month: "long", day: "numeric" }})}}
+            {{new Date().toLocaleDateString("en-US", {{ weekday: "long", year: "numeric", month: "long", day: "numeric" }}))}}
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
@@ -2008,9 +2008,9 @@ export default function PipelinePage() {{
         </div>
         {{adding && (
           <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 flex gap-3 flex-wrap">
-            <input value={{form.title}} onChange={{e => setForm(p=>{{...p,title:e.target.value}})}} placeholder="Deal title"  className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.contact}} onChange={{e => setForm(p=>{{...p,contact:e.target.value}})}} placeholder="Contact" className="flex-1 min-w-[140px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.value}} onChange={{e => setForm(p=>{{...p,value:e.target.value}})}} placeholder="Value ($)" type="number" className="w-28 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.title}} onChange={{e => setForm(p=>({{...p,title:e.target.value}}))}} placeholder="Deal title"  className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.contact}} onChange={{e => setForm(p=>({{...p,contact:e.target.value}}))}} placeholder="Contact" className="flex-1 min-w-[140px] bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.value}} onChange={{e => setForm(p=>({{...p,value:e.target.value}}))}} placeholder="Value ($)" type="number" className="w-28 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
             <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Add</button>
           </div>
         )}}
@@ -2079,7 +2079,7 @@ export default function ProductsPage() {{
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">🛍️ Products</h1>
-            <p className="text-gray-400 text-sm mt-1">{{products.length}} products · ${{{invVal.toLocaleString()}}} inventory value</p>
+            <p className="text-gray-400 text-sm mt-1">{{products.length}} products · ${{invVal.toLocaleString()}} inventory value</p>
           </div>
           <button onClick={{() => setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Product</button>
         </div>
@@ -2090,10 +2090,10 @@ export default function ProductsPage() {{
         </div>
         {{adding && (
           <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 grid grid-cols-2 gap-3">
-            <input value={{form.name}} onChange={{e=>setForm(p=>{{...p,name:e.target.value}})}} placeholder="Product name" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.price}} onChange={{e=>setForm(p=>{{...p,price:e.target.value}})}} placeholder="Price ($)" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.stock}} onChange={{e=>setForm(p=>{{...p,stock:e.target.value}})}} placeholder="Stock qty" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+            <input value={{form.name}} onChange={{e=>setForm(p=>({{...p,name:e.target.value}}))}} placeholder="Product name" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.price}} onChange={{e=>setForm(p=>({{...p,price:e.target.value}}))}} placeholder="Price ($)" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.stock}} onChange={{e=>setForm(p=>({{...p,stock:e.target.value}}))}} placeholder="Stock qty" type="number" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <select value={{form.category}} onChange={{e=>setForm(p=>({{...p,category:e.target.value}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
               {{CATS.slice(1).map(c2=><option key={{c2}}>{{c2}}</option>)}}
             </select>
             <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Add Product</button>
@@ -2107,7 +2107,7 @@ export default function ProductsPage() {{
                 <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{p.status==="active"?"bg-green-900/40 text-green-300":"bg-gray-800 text-gray-500"}}`}}>{{p.status}}</span>
               </div>
               <h3 className="font-semibold text-white mb-1">{{p.name}}</h3>
-              <p className="text-2xl font-bold text-{c}-400 mb-1">${{{p.price.toFixed(2)}}}</p>
+              <p className="text-2xl font-bold text-{c}-400 mb-1">${{p.price.toFixed(2)}}</p>
               <p className={{`text-xs mb-4 ${{p.stock===0?"text-red-400":p.stock<10?"text-yellow-400":"text-gray-400"}}`}}>
                 {{p.stock===0?"Out of stock":`${{p.stock}} in stock`}}
               </p>
@@ -2174,10 +2174,10 @@ export default function BlogPage() {{
         </div>
         {{adding && (
           <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 space-y-3">
-            <input value={{form.title}} onChange={{e=>setForm(p=>{{...p,title:e.target.value}})}} placeholder="Post title…" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <textarea value={{form.excerpt}} onChange={{e=>setForm(p=>{{...p,excerpt:e.target.value}})}} placeholder="Write your excerpt or content…" rows={{3}} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm resize-none" />
+            <input value={{form.title}} onChange={{e=>setForm(p=>({{...p,title:e.target.value}}))}} placeholder="Post title…" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <textarea value={{form.excerpt}} onChange={{e=>setForm(p=>({{...p,excerpt:e.target.value}}))}} placeholder="Write your excerpt or content…" rows={{3}} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm resize-none" />
             <div className="flex gap-3">
-              <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm flex-1">
+              <select value={{form.category}} onChange={{e=>setForm(p=>({{...p,category:e.target.value}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm flex-1">
                 {{CATS.slice(1).map(c2=><option key={{c2}}>{{c2}}</option>)}}
               </select>
               <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save Draft</button>
@@ -2280,13 +2280,13 @@ export default function TransactionsPage() {{
         </div>
         {{adding && (
           <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 grid grid-cols-2 gap-3">
-            <input value={{form.title}} onChange={{e=>setForm(p=>{{...p,title:e.target.value}})}} placeholder="Description" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.amount}} onChange={{e=>setForm(p=>{{...p,amount:e.target.value}})}} placeholder="Amount ($)" type="number" step="0.01" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <input value={{form.date}} onChange={{e=>setForm(p=>{{...p,date:e.target.value}})}} type="date" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
-            <select value={{form.type}} onChange={{e=>setForm(p=>{{...p,type:e.target.value as TxType,category:e.target.value==="income"?"Salary":"Food"}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+            <input value={{form.title}} onChange={{e=>setForm(p=>({{...p,title:e.target.value}}))}} placeholder="Description" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.amount}} onChange={{e=>setForm(p=>({{...p,amount:e.target.value}}))}} placeholder="Amount ($)" type="number" step="0.01" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.date}} onChange={{e=>setForm(p=>({{...p,date:e.target.value}}))}} type="date" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <select value={{form.type}} onChange={{e=>setForm(p=>({{...p,type:e.target.value as TxType,category:e.target.value==="income"?"Salary":"Food"}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
               <option value="income">Income</option><option value="expense">Expense</option>
             </select>
-            <select value={{form.category}} onChange={{e=>setForm(p=>{{...p,category:e.target.value}})}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+            <select value={{form.category}} onChange={{e=>setForm(p=>({{...p,category:e.target.value}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
               {{(form.type==="income"?INC_CATS:EXP_CATS).map(c2=><option key={{c2}}>{{c2}}</option>)}}
             </select>
             <button onClick={{add}} className="col-span-2 bg-{c}-700 hover:bg-{c}-600 py-2 rounded-xl text-sm font-medium">Save</button>
@@ -2306,6 +2306,1112 @@ export default function TransactionsPage() {{
               <button onClick={{()=>remove(tx.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
             </div>
           ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Faceless Social — Pages manager ───────────────────────────────────────
+
+    @staticmethod
+    def faceless_pages_list(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type Platform = "TikTok" | "Instagram" | "Both";
+type Status   = "active" | "growing" | "dormant";
+interface Page {{
+  id: string; name: string; niche: string; platform: Platform;
+  followers: number; status: Status; posts: number; revenue: number;
+}}
+const PLAT_COLOR = {{ TikTok: "bg-pink-900/40 text-pink-300", Instagram: "bg-purple-900/40 text-purple-300", Both: "bg-blue-900/40 text-blue-300" }};
+const STAT_COLOR = {{ active: "bg-green-900/40 text-green-300", growing: "bg-yellow-900/40 text-yellow-300", dormant: "bg-gray-800 text-gray-500" }};
+
+export default function PagesPage() {{
+  const [pages, setPages] = useState<Page[]>([
+    {{ id: "1", name: "@mindset.fuel",      niche: "Mindset & Motivation",          platform: "TikTok",    followers: 14200, status: "active",  posts: 87,  revenue: 340  }},
+    {{ id: "2", name: "@wealthbuilder.ig",  niche: "Personal Finance for Gen Z",    platform: "Instagram", followers: 8900,  status: "growing", posts: 54,  revenue: 120  }},
+    {{ id: "3", name: "@darkpsych.clips",   niche: "Dark Psychology & Persuasion",  platform: "Both",      followers: 31000, status: "active",  posts: 203, revenue: 1200 }},
+  ]);
+  const [form, setForm]     = useState({{ name: "", niche: "", platform: "TikTok" as Platform }});
+  const [adding, setAdding] = useState(false);
+
+  const add = () => {{
+    if (!form.name.trim() || !form.niche.trim()) return;
+    setPages(p => [...p, {{ ...form, id: Date.now().toString(), followers: 0, status: "growing" as const, posts: 0, revenue: 0 }}]);
+    setForm({{ name: "", niche: "", platform: "TikTok" }});
+    setAdding(false);
+  }};
+  const remove = (id: string) => setPages(p => p.filter(pg => pg.id !== id));
+  const cycle  = (id: string) => setPages(p => p.map(pg => {{
+    if (pg.id !== id) return pg;
+    const next = {{ active: "growing", growing: "dormant", dormant: "active" }} as const;
+    return {{ ...pg, status: next[pg.status] }};
+  }}));
+
+  const totalFollowers = pages.reduce((s, p) => s + p.followers, 0);
+  const totalRevenue   = pages.reduce((s, p) => s + p.revenue, 0);
+  const totalPosts     = pages.reduce((s, p) => s + p.posts, 0);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">📱 My Pages</h1>
+            <p className="text-gray-400 text-sm mt-1">{{pages.length}} pages · {{totalFollowers.toLocaleString()}} followers · ${{totalRevenue.toLocaleString()}} earned · {{totalPosts}} posts</p>
+          </div>
+          <button onClick={{() => setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ New Page</button>
+        </div>
+
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 mb-8 space-y-4">
+            <h2 className="font-semibold">Add a faceless page</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input value={{form.name}} onChange={{e => setForm(p => ({{...p, name: e.target.value}}))}} placeholder="Handle e.g. @darkpsych.clips"
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+              <input value={{form.niche}} onChange={{e => setForm(p => ({{...p, niche: e.target.value}}))}} placeholder="Niche e.g. Dark Psychology"
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+              <select value={{form.platform}} onChange={{e => setForm(p => ({{...p, platform: e.target.value as Platform}}))}}
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                <option>TikTok</option><option>Instagram</option><option>Both</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save</button>
+              <button onClick={{() => setAdding(false)}} className="border border-gray-700 px-4 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+          </div>
+        )}}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {{pages.map(pg => (
+            <div key={{pg.id}} className="bg-gray-900 rounded-2xl p-5 border border-gray-800 flex flex-col gap-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-bold text-white">{{pg.name}}</p>
+                  <p className="text-gray-400 text-xs mt-0.5">{{pg.niche}}</p>
+                </div>
+                <button onClick={{() => remove(pg.id)}} className="text-gray-700 hover:text-red-400 transition text-sm">✕</button>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{PLAT_COLOR[pg.platform]}}`}}>{{pg.platform}}</span>
+                <button onClick={{() => cycle(pg.id)}} className={{`text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer ${{STAT_COLOR[pg.status]}}`}}>{{pg.status}}</button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-800">
+                <div className="text-center">
+                  <p className="text-{c}-400 font-bold text-sm">{{pg.followers >= 1000 ? `${{(pg.followers/1000).toFixed(1)}}K` : pg.followers}}</p>
+                  <p className="text-gray-600 text-xs">followers</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-white font-bold text-sm">{{pg.posts}}</p>
+                  <p className="text-gray-600 text-xs">posts</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-green-400 font-bold text-sm">${{pg.revenue}}</p>
+                  <p className="text-gray-600 text-xs">earned</p>
+                </div>
+              </div>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Faceless Social — Content queue ───────────────────────────────────────
+
+    @staticmethod
+    def faceless_queue(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type PostStatus = "draft" | "queued" | "posted";
+type Format     = "talking head" | "text overlay" | "POV skit" | "storytime" | "hot take" | "tutorial" | "greenscreen" | "duet bait";
+interface Post  {{ id: string; page: string; hook: string; caption: string; format: Format; platform: string; scheduledFor: string; status: PostStatus; }}
+
+const S_COLOR = {{ draft: "bg-gray-800 text-gray-400", queued: "bg-yellow-900/40 text-yellow-300", posted: "bg-green-900/40 text-green-300" }};
+const FORMATS: Format[] = ["talking head","text overlay","POV skit","storytime","hot take","tutorial","greenscreen","duet bait"];
+
+export default function QueuePage() {{
+  const today = new Date().toISOString().split("T")[0];
+  const [posts, setPosts] = useState<Post[]>([
+    {{ id:"1", page:"@darkpsych.clips",  hook:"Nobody tells you this about manipulation",        caption:"Dark psychology thread 🧵 Save this.",             format:"text overlay", platform:"TikTok",    scheduledFor:"2025-01-20", status:"queued" }},
+    {{ id:"2", page:"@mindset.fuel",     hook:"I wasted 3 years until I learned this one thing", caption:"The mindset shift that changed everything for me.", format:"storytime",    platform:"TikTok",    scheduledFor:"2025-01-21", status:"draft"  }},
+    {{ id:"3", page:"@wealthbuilder.ig", hook:"Stop saving money. Do this instead.",              caption:"Your bank account will thank you later 💰",         format:"hot take",     platform:"Instagram", scheduledFor:"2025-01-19", status:"posted" }},
+  ]);
+  const [filter, setFilter]   = useState<PostStatus | "all">("all");
+  const [form, setForm]       = useState({{ page: "", hook: "", caption: "", format: "text overlay" as Format, platform: "TikTok", scheduledFor: today }});
+  const [adding, setAdding]   = useState(false);
+
+  const visible = posts.filter(p => filter === "all" || p.status === filter)
+    .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
+
+  const add = () => {{
+    if (!form.hook.trim()) return;
+    setPosts(p => [...p, {{ ...form, id: Date.now().toString(), status: "draft" as const }}]);
+    setForm({{ page: "", hook: "", caption: "", format: "text overlay", platform: "TikTok", scheduledFor: today }});
+    setAdding(false);
+  }};
+  const advance = (id: string) => setPosts(p => p.map(post => {{
+    if (post.id !== id) return post;
+    const next = {{ draft: "queued", queued: "posted", posted: "posted" }} as const;
+    return {{ ...post, status: next[post.status] }};
+  }}));
+  const remove = (id: string) => setPosts(p => p.filter(post => post.id !== id));
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">📅 Content Queue</h1>
+            <p className="text-gray-400 text-sm mt-1">{{posts.filter(p=>p.status==="queued").length}} queued · {{posts.filter(p=>p.status==="draft").length}} drafts · {{posts.filter(p=>p.status==="posted").length}} posted</p>
+          </div>
+          <button onClick={{()=>setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Add Post</button>
+        </div>
+
+        <div className="flex gap-2 mb-6">
+          {{(["all","draft","queued","posted"] as const).map(f => (
+            <button key={{f}} onClick={{()=>setFilter(f)}} className={{`px-3 py-1.5 rounded-lg text-sm capitalize transition ${{filter===f?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{f}}</button>
+          ))}}
+        </div>
+
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input value={{form.page}} onChange={{e=>setForm(p=>({{...p,page:e.target.value}}))}} placeholder="Page handle"
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+              <input value={{form.scheduledFor}} onChange={{e=>setForm(p=>({{...p,scheduledFor:e.target.value}}))}} type="date"
+                className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            </div>
+            <input value={{form.hook}} onChange={{e=>setForm(p=>({{...p,hook:e.target.value}}))}} placeholder="Hook — the first sentence that stops the scroll"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <textarea value={{form.caption}} onChange={{e=>setForm(p=>({{...p,caption:e.target.value}}))}} placeholder="Caption / script body…" rows={{3}}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm resize-none" />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={{form.format}} onChange={{e=>setForm(p=>({{...p,format:e.target.value as Format}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                {{FORMATS.map(f=><option key={{f}}>{{f}}</option>)}}
+              </select>
+              <select value={{form.platform}} onChange={{e=>setForm(p=>({{...p,platform:e.target.value}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                <option>TikTok</option><option>Instagram</option><option>Both</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save Draft</button>
+              <button onClick={{()=>setAdding(false)}} className="border border-gray-700 px-4 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+          </div>
+        )}}
+
+        <div className="space-y-3">
+          {{visible.map(post => (
+            <div key={{post.id}} className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+              <div className="flex items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-{c}-400 text-xs font-medium">{{post.page}}</span>
+                    <span className="text-gray-600 text-xs">·</span>
+                    <span className="text-gray-500 text-xs">{{post.scheduledFor}}</span>
+                    <span className="text-gray-600 text-xs">·</span>
+                    <span className="text-gray-500 text-xs">{{post.format}}</span>
+                    <span className="text-gray-600 text-xs">·</span>
+                    <span className="text-gray-500 text-xs">{{post.platform}}</span>
+                  </div>
+                  <p className="font-semibold text-white mb-1">{{post.hook}}</p>
+                  <p className="text-gray-400 text-sm truncate">{{post.caption}}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{S_COLOR[post.status]}}`}}>{{post.status}}</span>
+                  {{post.status !== "posted" && (
+                    <button onClick={{()=>advance(post.id)}} className="text-xs border border-gray-700 hover:border-{c}-500 hover:text-{c}-400 px-2 py-1 rounded-lg transition">
+                      {{post.status==="draft"?"→ Queue":"→ Posted"}}
+                    </button>
+                  )}}
+                  <button onClick={{()=>remove(post.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
+                </div>
+              </div>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Faceless Social — Caption generator ───────────────────────────────────
+
+    @staticmethod
+    def faceless_captions(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type HookType = "curiosity gap" | "bold claim" | "confrontational" | "POV" | "story opener" | "absurd stat";
+type NichePreset = "Dark Psychology" | "Personal Finance" | "Mindset" | "Productivity" | "Fitness" | "Relationships" | "Custom";
+
+const HOOK_EXAMPLES: Record<HookType, string> = {{
+  "curiosity gap":   "Nobody tells you this about…",
+  "bold claim":      "I stopped doing X and my life changed",
+  "confrontational": "If you still believe X, you're wrong",
+  "POV":             "POV: You just discovered that…",
+  "story opener":    "I lost everything at 24. Here's what I learned.",
+  "absurd stat":     "93% of people have no idea that…",
+}};
+
+const FORMATS = ["text overlay", "voiceover", "storytime", "hot take", "greenscreen", "tutorial", "POV skit", "duet bait"];
+
+export default function CaptionsPage() {{
+  const [niche, setNiche]       = useState<NichePreset>("Dark Psychology");
+  const [customNiche, setCustom] = useState("");
+  const [hookType, setHookType] = useState<HookType>("curiosity gap");
+  const [format, setFormat]     = useState("text overlay");
+  const [topic, setTopic]       = useState("");
+  const [cta, setCta]           = useState("save this");
+  const [results, setResults]   = useState<{{hook:string; caption:string; score:number}}[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [saved, setSaved]       = useState<string[]>([]);
+
+  const activeNiche = niche === "Custom" ? customNiche : niche;
+
+  const generate = async () => {{
+    if (!topic.trim()) return;
+    setLoading(true);
+    try {{
+      const res = await fetch("/api/captions/generate", {{
+        method: "POST",
+        headers: {{ "Content-Type": "application/json" }},
+        body: JSON.stringify({{ niche: activeNiche, hookType, format, topic, cta }}),
+      }});
+      const data = await res.json();
+      setResults(data.results || []);
+    }} catch {{
+      // Fallback: show template-based results
+      const hook    = HOOK_EXAMPLES[hookType].replace("X", topic).replace("…", ` ${{topic}}`);
+      const caption = `${{hook}}\\n\\n${{activeNiche}} niche tip — if you know, you know.\\n\\n${{cta.charAt(0).toUpperCase()+cta.slice(1)}} for more like this.`;
+      setResults([{{ hook, caption, score: 72 }}, {{ hook: `Wait — ${{topic}}?`, caption: `Most people get ${{topic}} completely wrong.\\n\\nHere's the truth nobody wants to admit.\\n\\n${{cta.charAt(0).toUpperCase()+cta.slice(1)}}.`, score: 68 }}]);
+    }} finally {{
+      setLoading(false);
+    }}
+  }};
+
+  const saveCaption = (caption: string) => setSaved(p => [...p, caption]);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">✍️ Caption Generator</h1>
+          <p className="text-gray-400 text-sm mt-1">Generate viral hooks and captions for your faceless pages</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {{/* Controls */}}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">Niche</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {{(["Dark Psychology","Personal Finance","Mindset","Productivity","Fitness","Relationships","Custom"] as NichePreset[]).map(n => (
+                  <button key={{n}} onClick={{()=>setNiche(n)}} className={{`px-3 py-1 rounded-lg text-xs transition ${{niche===n?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{n}}</button>
+                ))}}
+              </div>
+              {{niche === "Custom" && (
+                <input value={{customNiche}} onChange={{e=>setCustom(e.target.value)}} placeholder="Type your niche…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+              )}}
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">Hook Type</label>
+              <div className="flex flex-wrap gap-2">
+                {{(Object.keys(HOOK_EXAMPLES) as HookType[]).map(h => (
+                  <button key={{h}} onClick={{()=>setHookType(h)}} className={{`px-3 py-1 rounded-lg text-xs transition ${{hookType===h?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{h}}</button>
+                ))}}
+              </div>
+              <p className="text-gray-600 text-xs mt-2 italic">e.g. "{{HOOK_EXAMPLES[hookType]}}"</p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">Format</label>
+              <div className="flex flex-wrap gap-2">
+                {{FORMATS.map(f => (
+                  <button key={{f}} onClick={{()=>setFormat(f)}} className={{`px-3 py-1 rounded-lg text-xs transition ${{format===f?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{f}}</button>
+                ))}}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">Topic / Angle</label>
+              <input value={{topic}} onChange={{e=>setTopic(e.target.value)}} placeholder="e.g. how social media hijacks your dopamine"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">CTA</label>
+              <div className="flex flex-wrap gap-2">
+                {{["save this","follow for more","comment below","share with a friend","part 2 in bio"].map(c2 => (
+                  <button key={{c2}} onClick={{()=>setCta(c2)}} className={{`px-3 py-1 rounded-lg text-xs transition ${{cta===c2?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{c2}}</button>
+                ))}}
+              </div>
+            </div>
+
+            <button onClick={{generate}} disabled={{loading || !topic.trim()}}
+              className={{`w-full py-3 rounded-xl font-medium text-sm transition ${{loading || !topic.trim()?"bg-gray-800 text-gray-600 cursor-not-allowed":`bg-{c}-600 hover:bg-{c}-500 text-white`}}`}}>
+              {{loading ? "Generating…" : "Generate Captions"}}
+            </button>
+          </div>
+
+          {{/* Results */}}
+          <div className="space-y-4">
+            {{results.length === 0 && !loading && (
+              <div className="h-48 flex items-center justify-center text-gray-600 text-sm border border-dashed border-gray-800 rounded-2xl">
+                Fill in the form and hit Generate →
+              </div>
+            )}}
+            {{results.map((r, i) => (
+              <div key={{i}} className="bg-gray-900 rounded-2xl p-5 border border-gray-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500">Option {{i+1}}</span>
+                  <span className={{`text-xs font-bold px-2 py-0.5 rounded-full ${{r.score>=75?"bg-green-900/40 text-green-300":"bg-yellow-900/40 text-yellow-300"}}`}}>Score {{r.score}}/100</span>
+                </div>
+                <p className="font-semibold text-white text-sm">{{r.hook}}</p>
+                <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-line">{{r.caption}}</p>
+                <button onClick={{()=>saveCaption(r.caption)}} className="text-xs border border-gray-700 hover:border-{c}-500 hover:text-{c}-400 px-3 py-1.5 rounded-lg transition">
+                  Save to Queue
+                </button>
+              </div>
+            ))}}
+            {{saved.length > 0 && (
+              <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+                <p className="text-xs font-medium text-gray-400 mb-2">✅ {{saved.length}} saved to queue</p>
+              </div>
+            )}}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Faceless Social — Revenue tracker ─────────────────────────────────────
+
+    @staticmethod
+    def faceless_revenue(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+
+type Source = "brand deal" | "affiliate" | "creator fund" | "digital product" | "consulting" | "other";
+interface Entry {{ id: string; page: string; source: Source; amount: number; date: string; notes: string; }}
+const SRC_COLOR: Record<Source,string> = {{
+  "brand deal":     "bg-purple-900/40 text-purple-300",
+  "affiliate":      "bg-blue-900/40 text-blue-300",
+  "creator fund":   "bg-yellow-900/40 text-yellow-300",
+  "digital product":"bg-green-900/40 text-green-300",
+  "consulting":     "bg-orange-900/40 text-orange-300",
+  "other":          "bg-gray-800 text-gray-400",
+}};
+const SOURCES: Source[] = ["brand deal","affiliate","creator fund","digital product","consulting","other"];
+
+export default function RevenuePage() {{
+  const today = new Date().toISOString().split("T")[0];
+  const [entries, setEntries] = useState<Entry[]>([
+    {{ id:"1", page:"@darkpsych.clips",  source:"brand deal",    amount:800,  date:"2025-01-10", notes:"NordVPN 30-day deal" }},
+    {{ id:"2", page:"@darkpsych.clips",  source:"affiliate",     amount:240,  date:"2025-01-14", notes:"Book affiliate — 18 sales" }},
+    {{ id:"3", page:"@mindset.fuel",     source:"creator fund",  amount:87,   date:"2025-01-15", notes:"TikTok TTCF payout" }},
+    {{ id:"4", page:"@wealthbuilder.ig", source:"brand deal",    amount:350,  date:"2025-01-18", notes:"Robinhood IG story" }},
+    {{ id:"5", page:"@darkpsych.clips",  source:"digital product",amount:160, date:"2025-01-20", notes:"PDF guide — 8 sales × $20" }},
+  ]);
+  const [form, setForm]     = useState({{ page:"", source:"brand deal" as Source, amount:"", date:today, notes:"" }});
+  const [adding, setAdding] = useState(false);
+  const [filter, setFilter] = useState<Source|"all">("all");
+
+  const visible = entries.filter(e => filter==="all" || e.source===filter).sort((a,b)=>b.date.localeCompare(a.date));
+  const total   = entries.reduce((s,e)=>s+e.amount,0);
+  const monthly = entries.filter(e=>e.date.startsWith(today.slice(0,7))).reduce((s,e)=>s+e.amount,0);
+
+  const bySource = SOURCES.map(src => ({{
+    src,
+    total: entries.filter(e=>e.source===src).reduce((s,e)=>s+e.amount,0),
+    count: entries.filter(e=>e.source===src).length,
+  }})).filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
+
+  const add = () => {{
+    if (!form.page.trim() || !form.amount) return;
+    setEntries(p => [...p, {{ ...form, id: Date.now().toString(), amount: Number(form.amount) }}]);
+    setForm({{ page:"", source:"brand deal", amount:"", date:today, notes:"" }});
+    setAdding(false);
+  }};
+  const remove = (id:string) => setEntries(p=>p.filter(e=>e.id!==id));
+  const fmt = (n:number) => n.toLocaleString("en",{{minimumFractionDigits:2,maximumFractionDigits:2}});
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">💰 Revenue</h1>
+            <p className="text-gray-400 text-sm mt-1">{{entries.length}} entries · ${{fmt(total)}} total · ${{fmt(monthly)}} this month</p>
+          </div>
+          <button onClick={{()=>setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Add Income</button>
+        </div>
+
+        {{/* Summary cards */}}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800 col-span-2 md:col-span-1">
+            <p className="text-xs text-gray-500 mb-1">Total earned</p>
+            <p className="text-2xl font-bold text-green-400">${{fmt(total)}}</p>
+          </div>
+          <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <p className="text-xs text-gray-500 mb-1">This month</p>
+            <p className="text-2xl font-bold text-{c}-400">${{fmt(monthly)}}</p>
+          </div>
+          <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <p className="text-xs text-gray-500 mb-1">Best source</p>
+            <p className="text-sm font-bold text-white">{{bySource[0]?.src ?? "—"}}</p>
+            <p className="text-green-400 font-bold">${{bySource[0]?.total.toLocaleString() ?? "0"}}</p>
+          </div>
+          <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <p className="text-xs text-gray-500 mb-2">By source</p>
+            {{bySource.map(x=>(
+              <div key={{x.src}} className="flex justify-between text-xs mb-0.5">
+                <span className="text-gray-400 truncate">{{x.src}}</span>
+                <span className="text-white font-medium">${{x.total.toLocaleString()}}</span>
+              </div>
+            ))}}
+          </div>
+        </div>
+
+        {{adding && (
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 grid grid-cols-2 gap-3">
+            <input value={{form.page}} onChange={{e=>setForm(p=>({{...p,page:e.target.value}}))}} placeholder="Page handle"
+              className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.amount}} onChange={{e=>setForm(p=>({{...p,amount:e.target.value}}))}} placeholder="Amount ($)" type="number" step="0.01"
+              className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <select value={{form.source}} onChange={{e=>setForm(p=>({{...p,source:e.target.value as Source}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+              {{SOURCES.map(s=><option key={{s}}>{{s}}</option>)}}
+            </select>
+            <input value={{form.date}} onChange={{e=>setForm(p=>({{...p,date:e.target.value}}))}} type="date" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <input value={{form.notes}} onChange={{e=>setForm(p=>({{...p,notes:e.target.value}}))}} placeholder="Notes (optional)" className="col-span-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm" />
+            <div className="col-span-2 flex gap-2">
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save</button>
+              <button onClick={{()=>setAdding(false)}} className="border border-gray-700 px-4 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+          </div>
+        )}}
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {{(["all",...SOURCES] as const).map(f=>(
+            <button key={{f}} onClick={{()=>setFilter(f as Source|"all")}} className={{`px-3 py-1 rounded-lg text-xs capitalize transition ${{filter===f?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{f}}</button>
+          ))}}
+        </div>
+
+        <div className="space-y-2">
+          {{visible.map(e=>(
+            <div key={{e.id}} className="bg-gray-900 rounded-xl px-4 py-3 border border-gray-800 flex items-center gap-4">
+              <div className="w-8 h-8 rounded-full bg-green-900/50 text-green-400 flex items-center justify-center text-sm shrink-0">$</div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">{{e.page}}</p>
+                <p className="text-gray-500 text-xs">{{e.notes || e.source}} · {{e.date}}</p>
+              </div>
+              <span className={{`text-xs px-2 py-0.5 rounded-full font-medium ${{SRC_COLOR[e.source]}}`}}>{{e.source}}</span>
+              <p className="font-bold text-green-400">+${{e.amount.toFixed(2)}}</p>
+              <button onClick={{()=>remove(e.id)}} className="text-gray-600 hover:text-red-400 transition">✕</button>
+            </div>
+          ))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Content Intelligence Loop — shared seed (used across all 5 pages) ─────
+    _LOOP_SEED = """
+const SEED: Post[] = [
+  { id:"1", title:"The dark psychology of persuasion",           hookType:"confrontational", format:"text-overlay", topic:"persuasion",        trendWeek:3, postedAt:"2025-01-05", views:47200, engRate:8.4, watchTime:67, sentiment:"positive" },
+  { id:"2", title:"Nobody tells you this about habits",           hookType:"curiosity-gap",   format:"storytime",    topic:"habits",            trendWeek:1, postedAt:"2025-01-08", views:12100, engRate:4.2, watchTime:45, sentiment:"mixed"    },
+  { id:"3", title:"Still think confidence is fake it till you make it?", hookType:"confrontational", format:"text-overlay", topic:"confidence", trendWeek:4, postedAt:"2025-01-12", views:38900, engRate:7.1, watchTime:59, sentiment:"positive" },
+  { id:"4", title:"POV: you just realized you've been manipulated", hookType:"pov",           format:"pov-skit",     topic:"manipulation",      trendWeek:2, postedAt:"2025-01-15", views:19400, engRate:5.8, watchTime:52, sentiment:"mixed"    },
+  { id:"5", title:"I stopped arguing. Here's what changed.",       hookType:"story",          format:"storytime",    topic:"communication",     trendWeek:6, postedAt:"2025-01-18", views:8700,  engRate:3.1, watchTime:38, sentiment:"positive" },
+  { id:"6", title:"93% don't know they're being emotionally manipulated", hookType:"absurd-stat", format:"text-overlay", topic:"emotions",     trendWeek:3, postedAt:"2025-01-20", views:52400, engRate:9.2, watchTime:71, sentiment:"positive" },
+  { id:"7", title:"The bold truth about why you're not growing",   hookType:"bold-claim",     format:"hot-take",     topic:"growth",            trendWeek:5, postedAt:"2025-01-22", views:22100, engRate:6.3, watchTime:48, sentiment:"mixed"    },
+  { id:"8", title:"The social media manipulation playbook",        hookType:"confrontational", format:"text-overlay", topic:"social media",      trendWeek:4, postedAt:"2025-01-25", views:41600, engRate:8.8, watchTime:64, sentiment:"positive" },
+];"""
+
+    # ── Content Intelligence Loop — Dashboard ─────────────────────────────────
+
+    @staticmethod
+    def loop_dashboard(color: str) -> str:
+        c = _col(color)[0]
+        seed = _T._LOOP_SEED
+        return f'''"use client";
+import {{ useState, useMemo }} from "react";
+type Sentiment = "positive" | "mixed" | "negative";
+interface Post {{ id:string; title:string; hookType:string; format:string; topic:string; trendWeek:number; postedAt:string; views:number; engRate:number; watchTime:number; sentiment:Sentiment; }}
+{seed}
+function bkt(w:number){{ return w<=2?"early":w<=5?"peak":"late"; }}
+function computePatterns(posts:Post[]){{
+  const vals = [...posts].map(p=>p.views).sort((a,b)=>a-b);
+  const median = vals[Math.floor(vals.length/2)]??1;
+  const groups:Record<string,Post[]>={{}};
+  posts.forEach(p=>{{ const k=`${{p.hookType}}|${{p.format}}|${{bkt(p.trendWeek)}}`; (groups[k]??=[]).push(p); }});
+  return Object.entries(groups).map(([k,ps])=>{{
+    const [hookType,format,bucket]=k.split("|");
+    const avgViews=Math.round(ps.reduce((s,p)=>s+p.views,0)/ps.length);
+    const mult=+(avgViews/median).toFixed(2);
+    const n=ps.length;
+    const conf=n>=5?"high":n>=3?"medium":n>=2?"low":"need more data";
+    return {{hookType,format,bucket,avgViews,mult,n,conf,median}};
+  }}).sort((a,b)=>b.mult-a.mult);
+}}
+export default function LoopDashboard(){{
+  const [week,setWeek]=useState(4);
+  const patterns=useMemo(()=>computePatterns(SEED),[]);
+  const power=patterns.filter(p=>p.mult>=1.3 && p.conf!=="need more data");
+  const b=bkt(week);
+  const match=power.find(p=>p.bucket===b)??power[0];
+  const totalViews=SEED.reduce((s,p)=>s+p.views,0);
+  const avgEng=(SEED.reduce((s,p)=>s+p.engRate,0)/SEED.length).toFixed(1);
+  return(
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">⟳ The Loop</h1>
+          <p className="text-gray-400 text-sm mt-1">Your history → your patterns → your next brief. Not generic trends — <em>your</em> data.</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {{[
+            {{label:"Posts tracked",   value:SEED.length.toString(),          sub:"in your history"}},
+            {{label:"Total views",     value:`${{(totalViews/1000).toFixed(0)}}K`, sub:"across all content"}},
+            {{label:"Avg engagement",  value:`${{avgEng}}%`,                     sub:"your personal baseline"}},
+            {{label:"Power patterns",  value:power.length.toString(),           sub:"consistently work for you"}},
+          ].map(s=>(
+            <div key={{s.label}} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+              <p className="text-2xl font-bold text-{c}-400">{{s.value}}</p>
+              <p className="text-xs text-gray-400 mt-1">{{s.label}}</p>
+              <p className="text-xs text-gray-700">{{s.sub}}</p>
+            </div>
+          ))}}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <h2 className="font-semibold mb-1">Where are you in the trend cycle?</h2>
+            <p className="text-gray-500 text-xs mb-4">1–2 emerging · 3–5 peak virality · 6–8 declining</p>
+            <div className="flex gap-2 flex-wrap mb-3">
+              {{Array.from({{length:8}},(_,i)=>i+1).map(w=>(
+                <button key={{w}} onClick={{()=>setWeek(w)}}
+                  className={{`w-10 h-10 rounded-xl text-sm font-bold transition ${{w===week?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{w}}</button>
+              ))}}
+            </div>
+            <p className="text-sm text-gray-400">Week <span className="text-white font-medium">{{week}}</span> — <span className="text-{c}-400 font-medium capitalize">{{b}} window</span></p>
+          </div>
+          {{match?(
+            <div className="bg-gray-900 rounded-2xl p-5 border border-{c}-800/40">
+              <p className="text-xs font-medium text-{c}-400 uppercase tracking-wider mb-2">Your next piece →</p>
+              <p className="text-xl font-bold text-white mb-1 capitalize">{{match.hookType}} hook · {{match.format}}</p>
+              <p className="text-gray-400 text-sm mb-3">In the <span className="text-white">{{match.bucket}}</span> window this is your strongest combination.</p>
+              <div className="flex gap-4">
+                <div><p className="text-{c}-400 font-bold text-lg">{{match.mult}}×</p><p className="text-gray-600 text-xs">your baseline</p></div>
+                <div><p className="text-white font-bold text-lg">{{match.avgViews.toLocaleString()}}</p><p className="text-gray-600 text-xs">avg views</p></div>
+                <div><p className="text-gray-400 font-bold text-lg">{{match.n}}</p><p className="text-gray-600 text-xs">data points</p></div>
+              </div>
+            </div>
+          ):(
+            <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800 flex items-center justify-center">
+              <p className="text-gray-500 text-sm text-center">Not enough data for week {{week}}.<br/>Add posts in the History tab.</p>
+            </div>
+          )}}
+        </div>
+        <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+          <h2 className="font-semibold mb-4">All power patterns</h2>
+          {{power.length===0?<p className="text-gray-500 text-sm">Add more posts to discover your patterns.</p>:(
+            <div className="space-y-3">
+              {{power.map((p,i)=>(
+                <div key={{i}} className="flex items-center gap-4 p-3 rounded-xl bg-gray-800/50">
+                  <div className="flex-1"><p className="text-sm font-medium capitalize">{{p.hookType}} + {{p.format}}</p><p className="text-gray-500 text-xs capitalize">{{p.bucket}} window · {{p.n}} post{{p.n>1?"s":""}}</p></div>
+                  <p className="font-bold text-{c}-400">{{p.mult}}× <span className="text-gray-500 text-xs font-normal">{{p.avgViews.toLocaleString()}} avg</span></p>
+                  <span className={{`text-xs px-2 py-0.5 rounded-full ${{p.conf==="high"?"bg-green-900/40 text-green-300":p.conf==="medium"?"bg-yellow-900/40 text-yellow-300":"bg-gray-700 text-gray-400"}}`}}>{{p.conf}}</span>
+                </div>
+              ))}}
+            </div>
+          )}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Content Intelligence Loop — Performance History ────────────────────────
+
+    @staticmethod
+    def loop_history(color: str) -> str:
+        c = _col(color)[0]
+        seed = _T._LOOP_SEED
+        return f'''"use client";
+import {{ useState, useMemo }} from "react";
+type HookType="confrontational"|"curiosity-gap"|"bold-claim"|"pov"|"story"|"absurd-stat";
+type Format="text-overlay"|"storytime"|"hot-take"|"pov-skit"|"tutorial"|"voiceover";
+type Sentiment="positive"|"mixed"|"negative";
+interface Post {{ id:string; title:string; hookType:HookType; format:Format; topic:string; trendWeek:number; postedAt:string; views:number; engRate:number; watchTime:number; sentiment:Sentiment; }}
+const HOOKS:HookType[]=["confrontational","curiosity-gap","bold-claim","pov","story","absurd-stat"];
+const FORMATS:Format[]=["text-overlay","storytime","hot-take","pov-skit","tutorial","voiceover"];
+{seed}
+function getTier(views:number,median:number){{
+  if(views>median*2)  return "breakout";
+  if(views>median*1.2)return "strong";
+  if(views>median*0.6)return "normal";
+  return "weak";
+}}
+const TIER_COLOR={{breakout:"bg-purple-900/40 text-purple-300",strong:"bg-blue-900/40 text-blue-300",normal:"bg-gray-700 text-gray-300",weak:"bg-red-900/30 text-red-400"}};
+export default function HistoryPage(){{
+  const today=new Date().toISOString().split("T")[0];
+  const [posts,setPosts]=useState<Post[]>(SEED);
+  const [adding,setAdding]=useState(false);
+  const [form,setForm]=useState({{title:"",hookType:"confrontational" as HookType,format:"text-overlay" as Format,topic:"",trendWeek:3,postedAt:today,views:"",engRate:"",watchTime:"",sentiment:"positive" as Sentiment}});
+  const sorted=useMemo(()=>[...posts].sort((a,b)=>b.views-a.views),[posts]);
+  const median=sorted[Math.floor(sorted.length/2)]?.views??1;
+  const add=()=>{{
+    if(!form.title.trim()||!form.views)return;
+    setPosts(p=>[...p,{{...form,id:Date.now().toString(),views:+form.views,engRate:+form.engRate,watchTime:+form.watchTime}}]);
+    setForm({{title:"",hookType:"confrontational",format:"text-overlay",topic:"",trendWeek:3,postedAt:today,views:"",engRate:"",watchTime:"",sentiment:"positive"}});
+    setAdding(false);
+  }};
+  const remove=(id:string)=>setPosts(p=>p.filter(x=>x.id!==id));
+  return(
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">📊 Performance History</h1>
+            <p className="text-gray-400 text-sm mt-1">Your baseline: <span className="text-white font-medium">{{median.toLocaleString()}} views</span> (personal median) · {{posts.length}} posts tracked</p>
+          </div>
+          <button onClick={{()=>setAdding(!adding)}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium transition">+ Add Post</button>
+        </div>
+        {{adding&&(
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-700 mb-6 space-y-3">
+            <input value={{form.title}} onChange={{e=>setForm(p=>({{...p,title:e.target.value}}))}} placeholder="Post title or topic"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <select value={{form.hookType}} onChange={{e=>setForm(p=>({{...p,hookType:e.target.value as HookType}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                {{HOOKS.map(h=><option key={{h}}>{{h}}</option>)}}
+              </select>
+              <select value={{form.format}} onChange={{e=>setForm(p=>({{...p,format:e.target.value as Format}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                {{FORMATS.map(f=><option key={{f}}>{{f}}</option>)}}
+              </select>
+              <input value={{form.topic}} onChange={{e=>setForm(p=>({{...p,topic:e.target.value}}))}} placeholder="Topic/angle" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div><label className="text-xs text-gray-500 mb-1 block">Trend week (1–8)</label><input type="number" min="1" max="8" value={{form.trendWeek}} onChange={{e=>setForm(p=>({{...p,trendWeek:+e.target.value}}))}} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/></div>
+              <div><label className="text-xs text-gray-500 mb-1 block">Views</label><input type="number" value={{form.views}} onChange={{e=>setForm(p=>({{...p,views:e.target.value}}))}} placeholder="47200" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/></div>
+              <div><label className="text-xs text-gray-500 mb-1 block">Eng rate %</label><input type="number" step="0.1" value={{form.engRate}} onChange={{e=>setForm(p=>({{...p,engRate:e.target.value}}))}} placeholder="8.4" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/></div>
+              <div><label className="text-xs text-gray-500 mb-1 block">Watch time %</label><input type="number" value={{form.watchTime}} onChange={{e=>setForm(p=>({{...p,watchTime:e.target.value}}))}} placeholder="67" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"/></div>
+            </div>
+            <div className="flex gap-3 items-center">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Comment sentiment</label>
+                <select value={{form.sentiment}} onChange={{e=>setForm(p=>({{...p,sentiment:e.target.value as Sentiment}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm">
+                  <option>positive</option><option>mixed</option><option>negative</option>
+                </select>
+              </div>
+              <input type="date" value={{form.postedAt}} onChange={{e=>setForm(p=>({{...p,postedAt:e.target.value}}))}} className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm self-end"/>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={{add}} className="bg-{c}-600 hover:bg-{c}-500 px-4 py-2 rounded-xl text-sm font-medium">Save</button>
+              <button onClick={{()=>setAdding(false)}} className="border border-gray-700 px-4 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+          </div>
+        )}}
+        <div className="space-y-2">
+          {{sorted.map(p=>{{
+            const tier=getTier(p.views,median);
+            return(
+              <div key={{p.id}} className="bg-gray-900 rounded-xl px-4 py-3 border border-gray-800 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{{p.title}}</p>
+                  <p className="text-gray-500 text-xs capitalize">{{p.hookType}} · {{p.format}} · wk {{p.trendWeek}} · {{p.postedAt}}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-white">{{p.views.toLocaleString()}}</p>
+                  <p className="text-gray-500 text-xs">{{p.engRate}}% eng · {{p.watchTime}}% watch</p>
+                </div>
+                <span className={{`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${{TIER_COLOR[tier]}}`}}>{{tier}}</span>
+                <button onClick={{()=>remove(p.id)}} className="text-gray-600 hover:text-red-400 transition shrink-0">✕</button>
+              </div>
+            );
+          }}))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Content Intelligence Loop — Pattern Engine ─────────────────────────────
+
+    @staticmethod
+    def loop_patterns(color: str) -> str:
+        c = _col(color)[0]
+        seed = _T._LOOP_SEED
+        return f'''"use client";
+import {{ useState, useMemo }} from "react";
+type Sentiment="positive"|"mixed"|"negative";
+interface Post {{ id:string; title:string; hookType:string; format:string; topic:string; trendWeek:number; postedAt:string; views:number; engRate:number; watchTime:number; sentiment:Sentiment; }}
+{seed}
+type BktFilter="all"|"early"|"peak"|"late";
+function bkt(w:number){{return w<=2?"early":w<=5?"peak":"late";}}
+function computeAll(posts:Post[]){{
+  const vals=[...posts].map(p=>p.views).sort((a,b)=>a-b);
+  const median=vals[Math.floor(vals.length/2)]??1;
+  const groups:Record<string,Post[]>={{}};
+  posts.forEach(p=>{{const k=`${{p.hookType}}|${{p.format}}|${{bkt(p.trendWeek)}}`;(groups[k]??=[]).push(p);}});
+  return Object.entries(groups).map(([k,ps])=>{{
+    const[hookType,format,bucket]=k.split("|");
+    const avgViews=Math.round(ps.reduce((s,p)=>s+p.views,0)/ps.length);
+    const avgEng=+(ps.reduce((s,p)=>s+p.engRate,0)/ps.length).toFixed(1);
+    const avgWatch=Math.round(ps.reduce((s,p)=>s+p.watchTime,0)/ps.length);
+    const mult=+(avgViews/median).toFixed(2);
+    const n=ps.length;
+    const conf=n>=5?"high":n>=3?"medium":n>=2?"low":"need more data";
+    const isPower=mult>=1.3&&conf!=="need more data";
+    return{{hookType,format,bucket,avgViews,avgEng,avgWatch,mult,n,conf,isPower,median,posts:ps}};
+  }}).sort((a,b)=>b.mult-a.mult);
+}}
+const BUCKET_LABEL={{early:"Weeks 1–2 (Emerging)",peak:"Weeks 3–5 (Peak)",late:"Weeks 6–8 (Declining)"}};
+export default function PatternsPage(){{
+  const [filter,setFilter]=useState<BktFilter>("all");
+  const [expand,setExpand]=useState<string|null>(null);
+  const all=useMemo(()=>computeAll(SEED),[]);
+  const visible=filter==="all"?all:all.filter(p=>p.bucket===filter);
+  const power=all.filter(p=>p.isPower);
+  return(
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">🔬 Pattern Engine</h1>
+          <p className="text-gray-400 text-sm mt-1">What consistently works <em>for you</em> — grouped by hook × format × trend timing.</p>
+        </div>
+        {{power.length>0&&(
+          <div className="bg-gray-900 rounded-2xl p-5 border border-{c}-800/40 mb-6">
+            <p className="text-xs font-medium text-{c}-400 uppercase tracking-wider mb-3">Your power patterns</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {{power.map((p,i)=>(
+                <div key={{i}} className="bg-{c}-950/30 rounded-xl p-3 border border-{c}-900/30">
+                  <p className="font-semibold text-sm capitalize">{{p.hookType}} + {{p.format}}</p>
+                  <p className="text-gray-500 text-xs capitalize mb-2">{{BUCKET_LABEL[p.bucket as keyof typeof BUCKET_LABEL]}}</p>
+                  <div className="flex gap-3 text-xs">
+                    <span className="text-{c}-400 font-bold">{{p.mult}}× baseline</span>
+                    <span className="text-gray-400">{{p.avgViews.toLocaleString()}} avg views</span>
+                    <span className={{`font-medium ${{p.conf==="high"?"text-green-400":p.conf==="medium"?"text-yellow-400":"text-gray-400"}}`}}>{{p.conf}} confidence</span>
+                  </div>
+                </div>
+              ))}}
+            </div>
+          </div>
+        )}}
+        <div className="flex gap-2 mb-5">
+          {{(["all","early","peak","late"] as BktFilter[]).map(f=>(
+            <button key={{f}} onClick={{()=>setFilter(f)}} className={{`px-3 py-1.5 rounded-lg text-sm capitalize transition ${{filter===f?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>
+              {{f==="all"?"All windows":BUCKET_LABEL[f as keyof typeof BUCKET_LABEL]}}
+            </button>
+          ))}}
+        </div>
+        <div className="space-y-2">
+          {{visible.map((p,i)=>{{
+            const key=`${{p.hookType}}-${{p.format}}-${{p.bucket}}`;
+            const isOpen=expand===key;
+            return(
+              <div key={{i}} className={{`bg-gray-900 rounded-xl border ${{p.isPower?"border-{c}-800/40":"border-gray-800"}}`}}>
+                <button className="w-full px-4 py-3 flex items-center gap-4 text-left" onClick={{()=>setExpand(isOpen?null:key)}}>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium capitalize">{{p.hookType}} + {{p.format}}</p>
+                    <p className="text-gray-500 text-xs capitalize">{{p.bucket}} window · {{p.n}} post{{p.n>1?"s":""}}</p>
+                  </div>
+                  <p className={{`font-bold ${{p.mult>=1.5?"text-green-400":p.mult>=1.2?"text-{c}-400":p.mult>=0.8?"text-gray-300":"text-red-400"}}`}}>{{p.mult}}×</p>
+                  <span className={{`text-xs px-2 py-0.5 rounded-full ${{p.conf==="high"?"bg-green-900/40 text-green-300":p.conf==="medium"?"bg-yellow-900/40 text-yellow-300":p.conf==="low"?"bg-gray-700 text-gray-300":"bg-gray-800 text-gray-500"}}`}}>{{p.conf}}</span>
+                  {{p.isPower&&<span className="text-xs bg-{c}-900/40 text-{c}-300 px-2 py-0.5 rounded-full">⚡ power</span>}}
+                  <span className="text-gray-600 text-xs">{{isOpen?"▲":"▼"}}</span>
+                </button>
+                {{isOpen&&(
+                  <div className="px-4 pb-4 border-t border-gray-800 pt-3 grid grid-cols-3 gap-4">
+                    <div><p className="text-white font-bold">{{p.avgViews.toLocaleString()}}</p><p className="text-gray-500 text-xs">avg views</p></div>
+                    <div><p className="text-white font-bold">{{p.avgEng}}%</p><p className="text-gray-500 text-xs">avg engagement</p></div>
+                    <div><p className="text-white font-bold">{{p.avgWatch}}%</p><p className="text-gray-500 text-xs">avg watch time</p></div>
+                    <div className="col-span-3">
+                      <p className="text-gray-600 text-xs mb-1">Posts in this pattern:</p>
+                      {{p.posts.map(post=>(
+                        <p key={{post.id}} className="text-gray-400 text-xs py-0.5 truncate">· {{post.title}} ({{post.views.toLocaleString()}} views)</p>
+                      ))}}
+                    </div>
+                    {{p.conf==="need more data"&&<p className="col-span-3 text-yellow-400/80 text-xs bg-yellow-900/20 rounded-lg p-2">⚠ Only {{p.n}} post. Add {{3-p.n}} more using this combination to reach medium confidence.</p>}}
+                  </div>
+                )}}
+              </div>
+            );
+          }}))}}
+        </div>
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Content Intelligence Loop — Content Brief ──────────────────────────────
+
+    @staticmethod
+    def loop_brief(color: str) -> str:
+        c = _col(color)[0]
+        seed = _T._LOOP_SEED
+        return f'''"use client";
+import {{ useState, useMemo }} from "react";
+type Sentiment="positive"|"mixed"|"negative";
+interface Post {{ id:string; title:string; hookType:string; format:string; topic:string; trendWeek:number; postedAt:string; views:number; engRate:number; watchTime:number; sentiment:Sentiment; }}
+{seed}
+function bkt(w:number){{return w<=2?"early":w<=5?"peak":"late";}}
+interface Brief {{ hookType:string; format:string; bucket:string; mult:number; avgViews:number; n:number; conf:string; reasoning:string; median:number; posts:Post[]; }}
+function computeBrief(posts:Post[],week:number):Brief|null{{
+  const vals=[...posts].map(p=>p.views).sort((a,b)=>a-b);
+  const median=vals[Math.floor(vals.length/2)]??1;
+  const b=bkt(week);
+  const groups:Record<string,Post[]>={{}};
+  posts.forEach(p=>{{const k=`${{p.hookType}}|${{p.format}}|${{bkt(p.trendWeek)}}`;(groups[k]??=[]).push(p);}});
+  const patterns=Object.entries(groups).map(([k,ps])=>{{
+    const[hookType,format,bucket]=k.split("|");
+    const avgViews=Math.round(ps.reduce((s,p)=>s+p.views,0)/ps.length);
+    const mult=+(avgViews/median).toFixed(2);
+    const n=ps.length;
+    const conf=n>=5?"high":n>=3?"medium":n>=2?"low":"need more data";
+    return{{hookType,format,bucket,avgViews,mult,n,conf,median,posts:ps}};
+  }}).filter(p=>p.bucket===b&&p.conf!=="need more data"&&p.mult>=1.0).sort((a,b)=>b.mult-a.mult);
+  if(!patterns.length)return null;
+  const top=patterns[0];
+  const topPosts=top.posts.map(p=>`${{p.title}} (${{p.views.toLocaleString()}} views)`).join("; ");
+  const reasoning=`Last ${{top.n}} time${{top.n>1?"s":""}} you used a ${{top.hookType}} hook with ${{top.format}} in the ${{top.bucket}} trend window, your average was ${{top.avgViews.toLocaleString()}} views — ${{top.mult}}× your personal baseline of ${{top.median.toLocaleString()}}. Based on: ${{topPosts}}.`;
+  return{{...top,reasoning}};
+}}
+const TOPIC_IDEAS:Record<string,string[]>={{
+  "confrontational":["The lie everyone believes about X","If you're still doing X, you're wrong","Stop doing X — the real reason it's hurting you"],
+  "curiosity-gap":["Nobody tells you this about X","What X actually means (it's not what you think)","The thing about X that changes everything"],
+  "bold-claim":["X is dead — here's what replaced it","I stopped doing X and my life changed","X is the most overrated advice in [niche]"],
+  "pov":["POV: you just discovered X","POV: it's been [timeframe] since you started X","POV: your future self is watching you do X"],
+  "story":["I lost [thing] because I didn't know this about X","The moment I understood X everything shifted","The [timeframe] I spent on X before this happened"],
+  "absurd-stat":["[X]% of people have no idea they're doing Y","Only [X]% of [audience] know this about Y","[X] out of 10 people who [do thing] don't know [fact]"],
+}};
+export default function BriefPage(){{
+  const [week,setWeek]=useState(4);
+  const brief=useMemo(()=>computeBrief(SEED,week),[week]);
+  const ideas=brief?TOPIC_IDEAS[brief.hookType]??[]:[];
+  return(
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">📋 Content Brief</h1>
+          <p className="text-gray-400 text-sm mt-1">A brief built from your performance history — not generic trend advice.</p>
+        </div>
+        <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800 mb-6">
+          <h2 className="font-semibold mb-3">What week are you in the trend cycle?</h2>
+          <div className="flex gap-2 flex-wrap">
+            {{Array.from({{length:8}},(_,i)=>i+1).map(w=>(
+              <button key={{w}} onClick={{()=>setWeek(w)}}
+                className={{`w-10 h-10 rounded-xl text-sm font-bold transition ${{w===week?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400 hover:text-white"}}`}}>{{w}}</button>
+            ))}}
+          </div>
+          <p className="text-gray-500 text-xs mt-3">1–2 = emerging trend · 3–5 = peak virality window · 6–8 = declining</p>
+        </div>
+        {{brief?(
+          <div className="space-y-5">
+            <div className="bg-gray-900 rounded-2xl p-6 border border-{c}-800/40">
+              <p className="text-xs font-medium text-{c}-400 uppercase tracking-wider mb-3">Your brief for week {{week}}</p>
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Hook type</p>
+                  <p className="text-xl font-bold capitalize">{{brief.hookType}}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Format</p>
+                  <p className="text-xl font-bold capitalize">{{brief.format}}</p>
+                </div>
+              </div>
+              <div className="flex gap-4 mb-5 pb-5 border-b border-gray-800">
+                <div><p className="text-{c}-400 font-bold text-xl">{{brief.mult}}×</p><p className="text-gray-600 text-xs">your baseline</p></div>
+                <div><p className="text-white font-bold text-xl">{{brief.avgViews.toLocaleString()}}</p><p className="text-gray-600 text-xs">expected avg views</p></div>
+                <div><p className={{`font-bold text-xl ${{brief.conf==="high"?"text-green-400":brief.conf==="medium"?"text-yellow-400":"text-gray-400"}}`}}>{{brief.conf}}</p><p className="text-gray-600 text-xs">confidence</p></div>
+              </div>
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <p className="text-xs font-medium text-gray-400 mb-2">Why this recommendation:</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{{brief.reasoning}}</p>
+              </div>
+            </div>
+            <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+              <h3 className="font-semibold mb-3">Topic angle starters</h3>
+              <p className="text-gray-500 text-xs mb-3">Based on your hook type. Fill in "X" with your niche topic.</p>
+              <div className="space-y-2">
+                {{ideas.map((idea,i)=>(
+                  <div key={{i}} className="bg-gray-800 rounded-xl px-4 py-3 text-sm text-gray-300">{{idea}}</div>
+                ))}}
+              </div>
+            </div>
+            {{brief.conf==="low"&&(
+              <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-2xl p-4 text-sm text-yellow-300">
+                ⚠ Low confidence — only {{brief.n}} post in this pattern. Add more posts with the same hook + format combination in the History tab to improve accuracy.
+              </div>
+            )}}
+          </div>
+        ):(
+          <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800 text-center">
+            <p className="text-gray-500 text-lg mb-2">No pattern data for week {{week}}</p>
+            <p className="text-gray-600 text-sm">You haven't posted enough content in the {{bkt(week)}} trend window yet.<br/>Add posts in the History tab with trend weeks matching this window.</p>
+          </div>
+        )}}
+      </div>
+    </main>
+  );
+}}
+'''
+
+    # ── Content Intelligence Loop — Trust Ladder (Twin) ───────────────────────
+
+    @staticmethod
+    def loop_twin(color: str) -> str:
+        c = _col(color)[0]
+        return f'''"use client";
+import {{ useState }} from "react";
+type TrustLevel = 1|2|3|4;
+type DisclosureMode = "none"|"subtle"|"full";
+interface LevelDef {{ level:TrustLevel; name:string; desc:string; unlocks:string; risk:string; riskColor:string; warning?:string; }}
+const LEVELS:LevelDef[]=[
+  {{
+    level:1, name:"Draft Review", desc:"Twin writes drafts. You edit and approve everything before it leaves.",
+    unlocks:"Caption + hook suggestions in your voice. Nothing posts without your explicit approval.",
+    risk:"None", riskColor:"text-green-400",
+  }},
+  {{
+    level:2, name:"Approve Before Post", desc:"Twin drafts + schedules. You get a 24-hour window to review or veto.",
+    unlocks:"Scheduled drafts, caption generation, hashtag bundles. You can edit anything before the window closes.",
+    risk:"Low", riskColor:"text-yellow-400",
+    warning:"Disclosure recommended: 'Some content uses AI assistance.'"
+  }},
+  {{
+    level:3, name:"Schedule with Window", desc:"Twin can post if you don't veto within 4 hours of scheduled time.",
+    unlocks:"Autonomous scheduling within your content calendar. Drift alerts if voice deviates.",
+    risk:"Medium", riskColor:"text-orange-400",
+    warning:"Requires: 30+ day track record at Level 2 · Drift score < 30 · Disclosure policy set."
+  }},
+  {{
+    level:4, name:"Full Autonomy", desc:"Twin posts on its own schedule based on your content strategy.",
+    unlocks:"Full autonomous operation. You review weekly performance reports, not individual posts.",
+    risk:"High — audience detection risk is real", riskColor:"text-red-400",
+    warning:"Requires: 90+ day track record · Drift score < 20 · Disclosure policy active · This is irreversible to your brand trust if your audience discovers it."
+  }},
+];
+const DRIFT_FACTORS=[
+  {{factor:"Posting frequency vs your norm", score:12, note:"You typically post 4–5x/week. Twin is set to 6–7x."}},
+  {{factor:"Hook type uniformity",            score:8,  note:"Twin overuses curiosity-gap (73% of recent drafts vs your 41%)."}},
+  {{factor:"Caption length variance",         score:5,  note:"Twin captions are 15% longer on average than your style."}},
+  {{factor:"Emoji density",                   score:3,  note:"Slightly higher than your baseline — within acceptable range."}},
+];
+export default function TwinPage(){{
+  const [level,setLevel]=useState<TrustLevel>(1);
+  const [disclosure,setDisclosure]=useState<DisclosureMode>("none");
+  const [driftLimit,setDriftLimit]=useState(30);
+  const driftScore=DRIFT_FACTORS.reduce((s,f)=>s+f.score,0);
+  const detectionRisk=Math.min(100,Math.round(driftScore*1.8+(level-1)*15));
+  const current=LEVELS.find(l=>l.level===level)!;
+  return(
+    <main className="min-h-screen bg-gray-950 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">🤖 Digital Twin</h1>
+          <p className="text-gray-400 text-sm mt-1">Graduated autonomy — you decide how much the twin operates independently. The trust you built in Stage 1 is the thing at stake here.</p>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {{/* Trust level selector */}}
+          <div className="lg:col-span-2 bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <h2 className="font-semibold mb-4">Autonomy Level</h2>
+            <div className="space-y-2 mb-5">
+              {{LEVELS.map(l=>(
+                <button key={{l.level}} onClick={{()=>setLevel(l.level)}}
+                  className={{`w-full text-left p-4 rounded-xl border transition ${{l.level===level?`border-{c}-700 bg-{c}-950/30`:"border-gray-800 hover:border-gray-700"}}`}}>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className={{`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${{l.level===level?`bg-{c}-600 text-white`:"bg-gray-800 text-gray-400"}}`}}>{{l.level}}</span>
+                    <span className="font-medium text-sm">{{l.name}}</span>
+                    <span className={{`ml-auto text-xs font-medium ${{l.riskColor}}`}}>{{l.risk}} risk</span>
+                  </div>
+                  <p className="text-gray-400 text-xs ml-9">{{l.desc}}</p>
+                </button>
+              ))}}
+            </div>
+            <div className="bg-gray-800/50 rounded-xl p-4">
+              <p className="text-xs font-medium text-gray-400 mb-2">At this level you unlock:</p>
+              <p className="text-sm text-gray-300">{{current.unlocks}}</p>
+              {{current.warning&&<p className="text-yellow-400/80 text-xs mt-2 bg-yellow-900/20 rounded-lg p-2">⚠ {{current.warning}}</p>}}
+            </div>
+          </div>
+          {{/* Risk panel */}}
+          <div className="space-y-4">
+            <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+              <h3 className="font-semibold mb-3 text-sm">Audience Detection Risk</h3>
+              <div className="relative h-2 bg-gray-800 rounded-full mb-2">
+                <div className={{`absolute inset-y-0 left-0 rounded-full transition-all ${{detectionRisk<30?"bg-green-500":detectionRisk<60?"bg-yellow-500":"bg-red-500"}}`}} style={{{{width:`${{detectionRisk}}%`}}}}/>
+              </div>
+              <p className={{`text-2xl font-bold ${{detectionRisk<30?"text-green-400":detectionRisk<60?"text-yellow-400":"text-red-400"}}`}}>{{detectionRisk}}%</p>
+              <p className="text-gray-500 text-xs mt-1">estimated probability your audience notices a voice change</p>
+            </div>
+            <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+              <h3 className="font-semibold mb-3 text-sm">Voice Drift Score</h3>
+              <p className={{`text-2xl font-bold ${{driftScore<20?"text-green-400":driftScore<40?"text-yellow-400":"text-red-400"}}`}}>{{driftScore}}<span className="text-gray-600 text-sm font-normal">/100</span></p>
+              <div className="mt-3 space-y-2">
+                {{DRIFT_FACTORS.map((f,i)=>(
+                  <div key={{i}}>
+                    <div className="flex justify-between text-xs mb-0.5">
+                      <span className="text-gray-400">{{f.factor}}</span>
+                      <span className={{`font-medium ${{f.score<5?"text-green-400":f.score<10?"text-yellow-400":"text-red-400"}}`}}>+{{f.score}}</span>
+                    </div>
+                    <p className="text-gray-600 text-xs">{{f.note}}</p>
+                  </div>
+                ))}}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <h3 className="font-semibold mb-3">Disclosure Policy</h3>
+            <p className="text-gray-500 text-xs mb-4">This doesn't just protect your audience — it protects your credibility if the twin is ever discovered. And it will be, eventually.</p>
+            <div className="space-y-2">
+              {{([["none","No disclosure — full persona maintenance"],["subtle","Subtle: 'Some content created with AI assistance'"],["full","Transparent: 'This account uses an AI content system'"]
+              ] as [DisclosureMode,string][]).map(([mode,label])=>(
+                <button key={{mode}} onClick={{()=>setDisclosure(mode)}}
+                  className={{`w-full text-left px-4 py-3 rounded-xl border text-sm transition ${{disclosure===mode?`border-{c}-700 text-white bg-{c}-950/30`:"border-gray-800 text-gray-400 hover:border-gray-700"}}`}}>
+                  {{label}}
+                </button>
+              ))}}
+            </div>
+            {{disclosure==="none"&&level>=3&&(
+              <p className="text-red-400/80 text-xs mt-3 bg-red-900/20 rounded-lg p-2">⚠ Running Level {{level}} with no disclosure significantly increases credibility risk. The audience trust you built takes months — it collapses in 48 hours.</p>
+            )}}
+          </div>
+          <div className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <h3 className="font-semibold mb-3">Drift Alert Threshold</h3>
+            <p className="text-gray-500 text-xs mb-4">Twin pauses and flags for your review if voice drift exceeds this score.</p>
+            <input type="range" min="10" max="80" step="5" value={{driftLimit}} onChange={{e=>setDriftLimit(+e.target.value)}}
+              className="w-full accent-{c}-500 mb-2"/>
+            <p className="text-sm"><span className={{`font-bold ${{driftLimit<25?"text-green-400":driftLimit<50?"text-yellow-400":"text-red-400"}}`}}>{{driftLimit}}</span><span className="text-gray-500"> / 100 — {{driftLimit<=20?"very strict":driftLimit<=35?"strict":driftLimit<=50?"moderate":"permissive"}}</span></p>
+            <p className="text-gray-600 text-xs mt-2">Current drift score is {{driftScore}}. {{driftScore>driftLimit?"⚠ Twin would be paused right now.":"Twin is within threshold."}}</p>
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <p className="text-xs text-gray-500 mb-2">The authenticity paradox:</p>
+              <p className="text-gray-400 text-xs leading-relaxed">Stage 1 builds your credibility. Stage 3 lets AI post as you. These are in tension. The drift detector helps with voice quality — it doesn't resolve the trust question. That's a design decision only you can make.</p>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -2408,7 +3514,52 @@ def _heuristic_requirements(description: str) -> dict:
     # --- Platform-specific overrides ---
     app_type = "generic"
 
-    if "tiktok" in words or "tik tok" in words:
+    # "content loop" or "performance loop" — the intelligence flywheel product
+    if any(w in words for w in ["content loop", "performance loop", "content intelligence",
+                                  "creator loop", "content history", "performance history",
+                                  "creator intelligence", "content flywheel"]) \
+       or ("loop" in words and any(w in words for w in ["content","creator","performance"])):
+        app_type = "content_intelligence_loop"
+        color = color if color != "blue" else "violet"
+        display_name = display_name or "Creator Intelligence"
+        tagline = "Your performance history → your patterns → your next brief. Not generic trends — your data."
+        features = [
+            {"name": "The Loop",       "desc": "Flywheel dashboard: history → patterns → brief",               "icon": "⟳"},
+            {"name": "History",        "desc": "Log every post with views, engagement, watch time, sentiment", "icon": "📊"},
+            {"name": "Pattern Engine", "desc": "What hook × format × timing consistently works for YOU",      "icon": "🔬"},
+            {"name": "Content Brief",  "desc": "Data-driven brief from your own performance — not trends",    "icon": "📋"},
+            {"name": "Trust Ladder",   "desc": "Graduated twin autonomy with drift detection and disclosure",  "icon": "🤖"},
+        ]
+        pages = [
+            {"name": "Loop",     "slug": "loop",     "type": "loop_dashboard", "description": "Flywheel dashboard"},
+            {"name": "History",  "slug": "history",  "type": "loop_history",   "description": "Performance log"},
+            {"name": "Patterns", "slug": "patterns", "type": "loop_patterns",  "description": "Pattern engine"},
+            {"name": "Brief",    "slug": "brief",    "type": "loop_brief",     "description": "Content brief"},
+            {"name": "Twin",     "slug": "twin",     "type": "loop_twin",      "description": "Digital twin"},
+        ]
+
+    # "faceless" beats "tiktok" — it's a page manager, not a TikTok twin
+    elif any(w in words for w in ["faceless", "faceless page", "faceless instagram",
+                                  "faceless tiktok", "anonymous page", "theme page",
+                                  "niche page", "content page"]):
+        app_type = "faceless_social"
+        color = color if color != "blue" else "purple"
+        display_name = display_name or "Faceless Page Manager"
+        tagline = "Run multiple faceless pages, fill your queue, and track every dollar you earn"
+        features = [
+            {"name": "Page Manager",    "desc": "Track all your faceless pages, niches, and follower counts", "icon": "📱"},
+            {"name": "Content Queue",   "desc": "Plan, draft, and queue posts across all pages",              "icon": "📅"},
+            {"name": "Caption AI",      "desc": "Generate viral hooks and captions per niche and format",    "icon": "✍️"},
+            {"name": "Revenue Tracker", "desc": "Log every brand deal, affiliate payment, and payout",       "icon": "💰"},
+        ]
+        pages = [
+            {"name": "Pages",    "slug": "pages",    "type": "faceless_pages_list", "description": "All faceless pages"},
+            {"name": "Queue",    "slug": "queue",    "type": "faceless_queue",      "description": "Content queue"},
+            {"name": "Captions", "slug": "captions", "type": "faceless_captions",   "description": "Caption generator"},
+            {"name": "Revenue",  "slug": "revenue",  "type": "faceless_revenue",    "description": "Revenue tracker"},
+        ]
+
+    elif "tiktok" in words or "tik tok" in words:
         app_type = "tiktok_digital_twin"
         color = "rose"
         display_name = (
@@ -2547,6 +3698,24 @@ def _detect_page_type(name: str, desc: str, features: list) -> str:
     combined = (name + " " + desc).lower()
 
     # Purpose-built types take priority
+    if "loop" in combined and any(w in combined for w in ["dashboard","flywheel","overview"]):
+        return "loop_dashboard"
+    if any(w in combined for w in ["performance history","content history","post history"]):
+        return "loop_history"
+    if any(w in combined for w in ["pattern engine","patterns","pattern recognition"]):
+        return "loop_patterns"
+    if any(w in combined for w in ["content brief","brief generator","next piece"]):
+        return "loop_brief"
+    if any(w in combined for w in ["trust ladder","digital twin","twin","autonomy"]):
+        return "loop_twin"
+    if any(w in combined for w in ["faceless", "pages list", "page manager"]):
+        return "faceless_pages_list"
+    if "queue" in combined and any(w in combined for w in ["content","post","schedule"]):
+        return "faceless_queue"
+    if any(w in combined for w in ["caption generator","caption","hook generator"]):
+        return "faceless_captions"
+    if any(w in combined for w in ["revenue","income tracker","earning"]):
+        return "faceless_revenue"
     if any(w in combined for w in ["kanban", "board"]):
         return "kanban"
     if any(w in combined for w in ["pipeline", "deal"]):
@@ -2992,6 +4161,33 @@ RULES:
 
             elif ptype == "tiktok_library":
                 content = _T.tiktok_library_page()
+
+            elif ptype == "faceless_pages_list":
+                content = _T.faceless_pages_list(color)
+
+            elif ptype == "faceless_queue":
+                content = _T.faceless_queue(color)
+
+            elif ptype == "faceless_captions":
+                content = _T.faceless_captions(color)
+
+            elif ptype == "faceless_revenue":
+                content = _T.faceless_revenue(color)
+
+            elif ptype == "loop_dashboard":
+                content = _T.loop_dashboard(color)
+
+            elif ptype == "loop_history":
+                content = _T.loop_history(color)
+
+            elif ptype == "loop_patterns":
+                content = _T.loop_patterns(color)
+
+            elif ptype == "loop_brief":
+                content = _T.loop_brief(color)
+
+            elif ptype == "loop_twin":
+                content = _T.loop_twin(color)
 
             elif ptype == "kanban":
                 content = _T.kanban_page(color)
